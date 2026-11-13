@@ -19,6 +19,7 @@ import { toast } from '@/lib/toast';
 import { NegociacaoAtividade } from '@/components/vendas/NegociacaoAtividade';
 import { EscolhaDoRecebimento } from '@/components/vendas/EscolhaDoRecebimento';
 import { precisaEscolherRecebimento, type RecebimentoDaVenda } from '@/lib/recebimento-parcelado';
+import { vendaTemRecibo } from '@/lib/recibo-da-venda';
 
 const fmt = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -155,16 +156,27 @@ export default function VendaDetalhe() {
               </p>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)] border border-[var(--t-border)] text-xs gap-1.5"
-            onClick={() => {
-              navigator.clipboard.writeText(venda.numero);
-              toast.success('Numero copiado');
-            }}
-          >
-            <Copy className="w-3.5 h-3.5" /> Copiar numero
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {vendaTemRecibo(venda.status) ? (
+              <Button
+                variant="ghost"
+                className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)] border border-[var(--t-border)] text-xs gap-1.5"
+                onClick={() => router.push(`/vendas/${venda.id}/recibo`)}
+              >
+                <Receipt className="w-3.5 h-3.5" /> Emitir recibo
+              </Button>
+            ) : null}
+            <Button
+              variant="ghost"
+              className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)] border border-[var(--t-border)] text-xs gap-1.5"
+              onClick={() => {
+                navigator.clipboard.writeText(venda.numero);
+                toast.success('Numero copiado');
+              }}
+            >
+              <Copy className="w-3.5 h-3.5" /> Copiar numero
+            </Button>
+          </div>
         </div>
       </div>
 
