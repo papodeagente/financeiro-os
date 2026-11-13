@@ -516,6 +516,12 @@ export default function ContasReceberPage() {
               </Button>
             );
           })()}
+          {i.venda_id ? (
+            // Recibo da venda desta conta, para o cliente (vendas saíram do menu em 08/10).
+            <Link href={`/vendas/${i.venda_id}/recibo`} className={`${ACAO_LINHA} inline-flex items-center`}>
+              Recibo
+            </Link>
+          ) : null}
           <Button
             type="button"
             variant="ghost"

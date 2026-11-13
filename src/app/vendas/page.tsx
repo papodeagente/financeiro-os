@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus, Search, Trash2, Eye, ShoppingCart } from 'lucide-react';
+import { Plus, Search, Trash2, Eye, ShoppingCart, Receipt } from 'lucide-react';
 import { VendaCRM, Cliente } from '@/lib/crm-types';
 import { nomeDoClienteOuTraco } from '@/lib/cliente-nome';
 import { loadEntities, deleteEntity } from '@/lib/crm-storage';
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { PageShell } from '@/components/PageShell';
 import { PageHeader } from '@/components/PageHeader';
 import { DataTable, DataTableColumn } from '@/components/ui/data-table';
+import { vendaTemRecibo } from '@/lib/recibo-da-venda';
 
 const fmt = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -158,6 +159,17 @@ export default function VendasPage() {
           >
             <Eye className="w-4 h-4" />
           </button>
+          {vendaTemRecibo(v.status) ? (
+            <button
+              type="button"
+              className="table-action-btn"
+              title="Emitir recibo"
+              aria-label={`Emitir recibo da venda ${v.numero}`}
+              onClick={e => { e.stopPropagation(); router.push(`/vendas/${v.id}/recibo`); }}
+            >
+              <Receipt className="w-4 h-4" />
+            </button>
+          ) : null}
           <button
             type="button"
             className="table-action-btn table-action-btn--danger"
