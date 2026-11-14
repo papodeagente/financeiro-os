@@ -39,6 +39,7 @@ console.log('--- caminhos do CS (middleware) ---');
 const abre: [string, string][] = [
   ['/admin', 'GET'], ['/admin/dashboard', 'GET'], ['/admin/tenants', 'GET'], ['/admin/tenants/ag-1', 'GET'],
   ['/admin/support', 'GET'], ['/admin/support/t-1', 'GET'], ['/admin/minha-conta', 'GET'],
+  ['/admin/modulos', 'GET'], ['/api/admin/modulos', 'GET'],
   ['/api/admin/auth/session', 'GET'], ['/api/admin/auth/senha', 'POST'], ['/api/admin/metrics', 'GET'],
   ['/api/admin/tenants', 'GET'], ['/api/admin/tenants/ag-1', 'GET'],
   ['/api/admin/support/tickets', 'GET'], ['/api/admin/support/tickets/t-1', 'GET'], ['/api/admin/support/tickets/t-1', 'PATCH'],
@@ -53,7 +54,7 @@ const fecha: [string, string][] = [
   ['/api/admin/planos', 'GET'], ['/api/admin/cofre-plataforma', 'GET'], ['/api/admin/razao', 'GET'],
   ['/api/admin/equipe', 'GET'], ['/api/admin/equipe', 'POST'], ['/api/admin/equipe/sa-1', 'PATCH'],
   ['/api/admin/convites', 'GET'], ['/api/admin/marketing/login', 'GET'],
-  ['/api/admin/support/tickets', 'POST'],
+  ['/api/admin/support/tickets', 'POST'], ['/api/admin/modulos', 'POST'],
   ['/dashboard', 'GET'], ['/financeiro-ag/contas', 'GET'], ['/api/contas-receber', 'GET'], ['/api/arquivos/x.pdf', 'GET'],
   ['/api/admin/tenantsx', 'GET'], ['/api/admin/metrics/../planos', 'GET'],
 ];
