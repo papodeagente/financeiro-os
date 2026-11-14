@@ -237,7 +237,8 @@ console.log('--- Busca e trilha ---');
 eq(buscarPorTermoDeMercado('migrar')[0]?.destino.href, '/mudanca', '"migrar" leva ao assistente');
 eq(buscarPorTermoDeMercado('glossário')[0]?.destino.href, '/mudanca/glossario', '"glossário" leva ao glossário');
 eq(buscarPorTermoDeMercado('paridade')[0]?.destino.href, '/mudanca/paridade', '"paridade" leva ao checklist');
-const paleta = readFileSync(new URL('../src/components/CommandPalette.tsx', import.meta.url), 'utf8');
+// Os itens e a busca do ⌘K moram em itens-da-busca.ts desde 14/11/2026 (por módulo).
+const paleta = readFileSync(new URL('../src/components/itens-da-busca.ts', import.meta.url), 'utf8');
 eq(['/mudanca\'', '/mudanca/glossario\'', '/mudanca/paridade\'', 'buscarNoGlossario('].every(t => paleta.includes(t)), true, 'a paleta ⌘K lista as três telas e busca no glossário');
 eq(buildTrail('/mudanca/glossario').map(c => c.label), ['Configurações', 'Mudar para o EnturOS', 'Glossário'], 'trilha do glossário');
 eq(buildTrail('/mudanca/paridade').map(c => c.label), ['Configurações', 'Mudar para o EnturOS', 'Checklist de paridade'], 'trilha do checklist');
