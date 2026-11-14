@@ -62,8 +62,9 @@ const query = async (text, values) => {
 };
 const pool = { query, connect: async () => ({ query, release() {} }) };
 globalThis.__POOL_DE_TESTE__ = pool;
-// Agência na versão completa: as rotas dos módulos conferem (scripts/db-de-teste.mjs).
-globalThis.__VERSAO_DE_TESTE__ = 'completa';
+// A versão de cada agência vem da tabela tenants do próprio teste (completa
+// por padrão; a parte 6 grava '{}' para provar a versão simples), sem o
+// atalho __VERSAO_DE_TESTE__ de db-de-teste.mjs.
 globalThis.__SESSAO_DE_TESTE__ = null;
 register('./ts-resolve-hook.mjs', import.meta.url);
 register('./db-de-teste-hook.mjs', import.meta.url);
