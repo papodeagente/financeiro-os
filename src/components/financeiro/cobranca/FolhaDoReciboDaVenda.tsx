@@ -7,6 +7,7 @@ import { ChevronLeft, Info } from 'lucide-react';
 import { dataPorExtenso } from '@/lib/cobranca/recibo';
 import type { LinhaRecebida, PaganteDoRecibo, ReciboDaFatura, ReciboDaVenda } from '@/lib/recibo-por-pagante';
 import { formatBRL } from '@/lib/utils';
+import type { MarcaDoDocumento } from '@/lib/marca-da-agencia';
 import { BarraDoRecibo } from './FolhaDoRecibo';
 
 /**
@@ -24,17 +25,45 @@ function dataCurta(iso: string): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : '—';
 }
 
+/**
+ * Identidade da agência (14/11/2026, marca-da-agencia.ts): logo e cores do
+ * cadastro, como no recibo da versão simples. A cor principal vai na faixa
+ * do topo (com o texto de maior contraste sobre ela), na linha do valor e na
+ * linha das tabelas; o corpo segue as cores do sistema, legível nos dois temas.
+ */
+function estiloDaMarca(marca: MarcaDoDocumento | undefined): React.CSSProperties | undefined {
+  if (!marca) return undefined;
+  return {
+    '--m': marca.primaria,
+    '--m-texto': marca.textoSobrePrimaria,
+    '--m-linha': marca.primariaLinha,
+    '--d': marca.destaque,
+  } as React.CSSProperties;
+}
+
+function FaixaDaMarca({ marca, nome }: { marca: MarcaDoDocumento | undefined; nome: string }) {
+  if (!marca) return null;
+  return (
+    <div
+      aria-hidden="true"
+      className="-mx-[var(--fin-s-5)] -mt-[var(--fin-s-5)] flex h-2 rounded-t-[var(--fin-r-lg)] sm:-mx-[var(--fin-s-6)] sm:-mt-[var(--fin-s-6)] print:rounded-none"
+      style={{ background: 'linear-gradient(90deg, var(--m) 0 78%, var(--d) 78% 100%)', printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact' }}
+      title={nome}
+    />
+  );
+}
+
 const FOLHA = 'mx-auto my-[var(--fin-s-4)] flex w-full max-w-[760px] flex-col gap-[var(--fin-s-5)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-5)] text-[var(--fin-text)] shadow-[var(--fin-e-card)] sm:p-[var(--fin-s-6)] print:my-0 print:rounded-none print:border-0 print:shadow-none';
 const TH = 'py-[var(--fin-s-2)] pr-[var(--fin-s-3)] text-left fin-t-caption font-medium text-[var(--fin-text-3)]';
 const TD = 'py-[var(--fin-s-2)] pr-[var(--fin-s-3)] align-top fin-t-body';
 
-function Cabecalho({ emitente, titulo, numero, valor, substitui }: { emitente: ReciboDaVenda['emitente']; titulo: string; numero: string; valor: number; substitui?: string | null }) {
+function Cabecalho({ emitente, titulo, numero, valor, substitui, marca }: { emitente: ReciboDaVenda['emitente']; titulo: string; numero: string; valor: number; substitui?: string | null; marca?: MarcaDoDocumento }) {
   return (
-    <header className="flex flex-col gap-[var(--fin-s-4)] border-b border-[var(--fin-border)] pb-[var(--fin-s-4)] sm:flex-row sm:items-start sm:justify-between">
+    <header className={`flex flex-col gap-[var(--fin-s-4)] border-b pb-[var(--fin-s-4)] sm:flex-row sm:items-start sm:justify-between ${marca ? 'border-[var(--m-linha)]' : 'border-[var(--fin-border)]'}`}>
       <div className="flex min-w-0 items-start gap-[var(--fin-s-3)]">
         {emitente.logo ? (
           // eslint-disable-next-line @next/next/no-img-element -- logotipo da agência, endereço de fora
-          <img src={emitente.logo} alt="" className="size-12 shrink-0 rounded-[var(--fin-r-md)] object-contain" />
+          <img src={emitente.logo} alt={emitente.nome} className="max-h-16 max-w-[180px] shrink-0 object-contain" />
         ) : null}
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="fin-t-subhead">{emitente.nome}</span>
@@ -47,7 +76,7 @@ function Cabecalho({ emitente, titulo, numero, valor, substitui }: { emitente: R
         <h1 className="fin-t-title tracking-[0.04em]">{titulo}</h1>
         <span className="fin-t-caption tabular-nums text-[var(--fin-text-3)]">Nº {numero}</span>
         {substitui ? <span className="fin-t-caption tabular-nums text-[var(--fin-text-2)]">Substitui o recibo Nº {substitui}</span> : null}
-        <span className="mt-1 rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] px-[var(--fin-s-3)] py-[var(--fin-s-1)] fin-t-metric-sm tabular-nums">
+        <span className={`mt-1 rounded-[var(--fin-r-md)] border px-[var(--fin-s-3)] py-[var(--fin-s-1)] fin-t-metric-sm tabular-nums ${marca ? 'border-[var(--m)] border-l-4' : 'border-[var(--fin-border-strong)]'}`}>
           {formatBRL(valor)}
         </span>
       </div>
@@ -111,8 +140,9 @@ function TabelaDePagamentos({ titulo, linhas, total, rotuloTotal }: { titulo: st
 export function FolhaDoReciboDaVenda({ recibo }: { recibo: ReciboDaVenda }) {
   const fornecedor = recibo.pagos_ao_fornecedor.reduce((s, l) => s + l.valor, 0);
   return (
-    <article aria-label={`Recibo ${recibo.numero}`} className={FOLHA}>
-      <Cabecalho emitente={recibo.emitente} titulo="RECIBO" numero={recibo.numero} valor={recibo.valor} substitui={recibo.substitui} />
+    <article aria-label={`Recibo ${recibo.numero}`} className={FOLHA} style={estiloDaMarca(recibo.marca)}>
+      <FaixaDaMarca marca={recibo.marca} nome={recibo.emitente.nome} />
+      <Cabecalho emitente={recibo.emitente} titulo="RECIBO" numero={recibo.numero} valor={recibo.valor} substitui={recibo.substitui} marca={recibo.marca} />
       {recibo.parcial ? <FaixaParcial emAberto={recibo.em_aberto} data={recibo.data} /> : null}
       <p className="fin-t-body max-w-[68ch] whitespace-pre-line text-[15px] leading-relaxed">{recibo.declaracao}</p>
 
@@ -162,8 +192,9 @@ export function FolhaDoReciboDaVenda({ recibo }: { recibo: ReciboDaVenda }) {
 export function FolhaDoReciboDaFatura({ recibo }: { recibo: ReciboDaFatura }) {
   const encargos = recibo.recebimentos.some(r => r.juros > 0 || r.multa > 0 || r.desconto > 0);
   return (
-    <article aria-label={`Recibo ${recibo.numero}`} className={FOLHA}>
-      <Cabecalho emitente={recibo.emitente} titulo="RECIBO" numero={recibo.numero} valor={recibo.valor} />
+    <article aria-label={`Recibo ${recibo.numero}`} className={FOLHA} style={estiloDaMarca(recibo.marca)}>
+      <FaixaDaMarca marca={recibo.marca} nome={recibo.emitente.nome} />
+      <Cabecalho emitente={recibo.emitente} titulo="RECIBO" numero={recibo.numero} valor={recibo.valor} marca={recibo.marca} />
       {recibo.parcial ? <FaixaParcial emAberto={recibo.em_aberto} data={recibo.data} /> : null}
       <p className="fin-t-body max-w-[68ch] text-[15px] leading-relaxed">
         Recebemos de <strong className="font-medium">{recibo.pagador.nome}</strong>

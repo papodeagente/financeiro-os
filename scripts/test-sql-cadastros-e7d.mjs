@@ -90,6 +90,9 @@ await pg.exec(CAMBIO_SCHEMA_SQL);
 await pg.exec(REEMBOLSOS_SCHEMA_SQL);
 
 const T = 'ag-1', T2 = 'ag-2', NOVA = 'ag-nova';
+// Versão por agência (14/11/2026): moeda pelo catálogo e campos obrigatórios são da versão COMPLETA (modulos.ts).
+await query(`CREATE TABLE IF NOT EXISTS tenants (id TEXT PRIMARY KEY, numero INTEGER, data JSONB NOT NULL DEFAULT '{}'::jsonb)`);
+await query(`INSERT INTO tenants (id, data) VALUES ('ag-1', '{"fin_versao":"completa"}'), ('ag-2', '{"fin_versao":"completa"}'), ('ag-nova', '{"fin_versao":"completa"}') ON CONFLICT (id) DO UPDATE SET data = tenants.data || EXCLUDED.data`);
 const sessao = (perfil, tenant = T) => ({ userId: `u-${perfil}-${tenant}`, nome: `Pessoa ${perfil}`, email: 'p@x.com', perfil, permissoes: {}, tenantId: tenant, tenantSlug: tenant });
 const P = await import('../src/lib/permissoes-servidor.ts');
 const como = s => { globalThis.__SESSAO_DE_TESTE__ = s; ator = { userId: s?.userId ?? '', tenantId: s?.tenantId ?? '' }; P.invalidarPermissoes?.(); };

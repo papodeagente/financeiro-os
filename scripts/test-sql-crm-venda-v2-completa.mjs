@@ -98,6 +98,8 @@ const { empresaPedidaPeloCrm } = await import('../src/lib/venda-crm-empresa.ts')
 const { lerExtratoDoCrm } = await import('../src/lib/conferencia-operadora-crm.ts');
 
 const T = 'agencia-e7e';
+// Versão por agência (14/11/2026): o que este teste prova é da versão COMPLETA (modulos.ts).
+await query(`INSERT INTO tenants (id, numero, data) VALUES ($1, 1, '{"fin_versao":"completa"}') ON CONFLICT (id) DO UPDATE SET data = tenants.data || EXCLUDED.data`, [T]);
 const todos = async (sql, args = []) => (await query(sql, args)).rows;
 const um = async (sql, args = []) => (await query(sql, args)).rows[0];
 await query(`INSERT INTO agencia (id, tenant_id, data) VALUES ('ag', $1, $2)`, [T, JSON.stringify({ nome_fantasia: 'Agência Matriz', cnpj: '11.111.111/0001-11' })]);
@@ -234,6 +236,43 @@ try {
   const c7 = await um(`SELECT fornecedor_id, fornecedor_nome FROM conferencias_operadora WHERE tenant_id = $1 AND arquivo_hash = 'crm:crm_extrato_7'`, [T]);
   eq([r.processado, /em outra moeda ficaram de fora/.test(r.acao), /sem operadora ligada/.test(r.acao), c7.fornecedor_id, c7.fornecedor_nome],
     [true, true, true, '', 'Operadora Sem Cadastro'], 'linha em outra moeda fica de fora; sem cadastro, a conferência abre sem operadora ligada');
+
+  console.log('--- (d) regra de 13/11 também na v2: quem recebe do cliente ---');
+  {
+    const hotel = { fornecedor_id: 'crm_cnpj_33444555000172', crm_supplier_id: '61', fornecedor_nome: 'Hotel Sol', fornecedor_cnpj: '33444555000172' };
+    const produto = (ref, o = {}) => ({
+      ref, tipo: 'HOTEL', descricao: `Hotel ${ref}`, fornecedor: hotel, representante: null, moeda: 'BRL', cambio: 1,
+      quantidade: 1, valor_unitario: 1000, taxas: 0, passageiros: [], componentes: [{ ref: 'c', tipo: 'COMISSAO', valor: 150 }], ...o,
+    });
+    const venda = (crm, produtos, o = {}) => ({
+      ...v1(crm, { valor_total: 1000, custo_total: 850, fornecedores: [{ ...hotel, servico: 'HOTEL', valor_custo: 850, valor_venda: 1000 }] }),
+      versao_venda: 2, venda: { intermediario: null, centro_custo: '', observacoes: '', produtos, pagamentos: [] }, ...o,
+    });
+    const contas = async crm => {
+      const v = await vendaPeloCrm(crm);
+      return {
+        receber: (await todos(`SELECT data FROM contas_receber WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2`, [T, v.id])).map(c => [c.data.origem, c.data.valor_final]).sort(),
+        pagar: (await todos(`SELECT data FROM contas_pagar WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2`, [T, v.id])).map(c => [c.data.fornecedor_nome, c.data.valor_final, c.data.crm_item_ids ?? null]).sort(),
+      };
+    };
+    r = await processarEventoCRM('VENDA_FECHADA', venda('crm_deal_r1', [produto('p1')]), 'r-1', T);
+    eq([r.processado, await contas('crm_deal_r1')], [true, { receber: [['VENDA', 1000]], pagar: [['Hotel Sol', 850, null]] }],
+      'padrão: a agência recebe do cliente e abre a conta a pagar do fornecedor');
+    const hotelId = (await um(`SELECT id FROM fornecedores_crm WHERE tenant_id = $1 AND crm_supplier_id = '61'`, [T])).id;
+    await query(`UPDATE fornecedores_crm SET data = data || '{"recebe_direto_do_cliente":true}' WHERE id = $1`, [hotelId]);
+    r = await processarEventoCRM('VENDA_FECHADA', venda('crm_deal_r2', [produto('p1')]), 'r-2', T);
+    eq(await contas('crm_deal_r2'), { receber: [['COMISSAO_FORNECEDOR', 150]], pagar: [] },
+      'fornecedor marcado "recebe direto do cliente": só a comissão a receber, como na v1');
+    r = await processarEventoCRM('VENDA_FECHADA', venda('crm_deal_r3', [produto('p1')], { plataforma_origem: 'pagarme', plataforma_transacao: 'or_9', plataforma_transacoes: ['or_9'] }), 'r-3', T);
+    eq((await contas('crm_deal_r3')).pagar.length, 1, 'pago pela plataforma da agência: a agência recebe e paga o fornecedor');
+    await query(`UPDATE fornecedores_crm SET data = data - 'recebe_direto_do_cliente' WHERE id = $1`, [hotelId]);
+    r = await processarEventoCRM('VENDA_FECHADA', venda('crm_deal_r4', [produto('p1', { cobrado_pelo_fornecedor: true })]), 'r-4', T);
+    eq(await contas('crm_deal_r4'), { receber: [['COMISSAO_FORNECEDOR', 150]], pagar: [] }, 'item cobrado pelo fornecedor na Cotação: pago direto');
+    r = await processarEventoCRM('VENDA_FECHADA', venda('crm_deal_r5', [produto('p1', { fornecedor: null, crm_item_ids: [301, 302] })]), 'r-5', T);
+    const semForn = await todos(`SELECT data FROM contas_pagar WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2`, [T, (await vendaPeloCrm('crm_deal_r5')).id]);
+    eq(semForn.map(c => [c.data.fornecedor_pendente === true, c.data.crm_item_ids]), [[true, [301, 302]]],
+      'produto sem fornecedor: conta pendente com os itens da Cotação (para o FORNECEDOR_DO_ITEM)');
+  }
 } finally {
   console.log(`\n${total - falhas}/${total} passaram`);
   if (falhas > 0) process.exit(1);

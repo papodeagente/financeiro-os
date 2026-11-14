@@ -14,6 +14,7 @@ import { aprenderComConciliacao, desfazerComRegras } from '@/lib/conciliacao-aut
 import { ErroBaixa } from '@/lib/baixas-servidor';
 import type { TipoLancamento } from '@/lib/conciliacao-plano';
 import { recusaAcao } from '@/lib/guarda-rota';
+import { temModulo } from '@/lib/modulos-servidor';
 
 /**
  * Conciliação de uma linha do extrato, numa transação só.
@@ -28,9 +29,14 @@ import { recusaAcao } from '@/lib/guarda-rota';
  * descrição (E6): numa transação à parte, que nunca desfaz a conciliação.
  */
 
-/** Aprender é bônus: se falhar, a conciliação que a pessoa fez continua. */
+/**
+ * Aprender é bônus: se falhar, a conciliação que a pessoa fez continua. As
+ * regras são da conciliação automática (módulo "Extrato automático"): na
+ * versão simples nada é aprendido, como sempre (14/11/2026).
+ */
 async function aprender(tenantId: string, extratoId: string): Promise<void> {
   try {
+    if (!(await temModulo(tenantId, 'extrato'))) return;
     await emTransacao(exec => aprenderComConciliacao(exec, tenantId, extratoId));
   } catch (e) {
     console.error('[conciliacao] regra não aprendida:', e instanceof Error ? e.message : e);

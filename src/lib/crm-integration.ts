@@ -41,7 +41,9 @@ import {
   reconciliarPagamentosSemDono, descreverReconciliacao,
 } from './crm-venda-plataforma';
 import { lerPedidoDeCancelamento, aplicarCancelamentoDoCrm } from './crm-venda-cancelada';
-import { ehVendaV2 } from './venda-crm-v2';
+import { ehVendaV2, vendaV2Aceita, versoesDaVenda } from './venda-crm-v2';
+import { modulosDaConta } from './modulos-servidor';
+import { moduloLigado } from './modulos';
 import { receberVendaV2DoCrm, voltarVendaParaV1 } from './venda-crm-v2-servidor';
 import { empresaDaVendaDoCrm } from './venda-crm-empresa';
 import { receberExtratoDoCrm } from './conferencia-operadora-crm-servidor';
@@ -57,6 +59,11 @@ import { TIPO_COMISSAO_DO_MES } from './comissao-do-crm';
 import { receberComissaoDoMes, respostaDaComissaoRepetida, type RespostaDaComissaoDoMes } from './comissao-do-crm-servidor';
 import { motivoDaRecusa } from './crm-do-ecossistema';
 import { perfilDosDados } from './perfil-da-conta';
+
+/** `versoes_venda` que o webhook responde para esta agência (venda-crm-v2.ts). */
+export async function versoesDaVendaDaConta(tenantId: string): Promise<number[]> {
+  return versoesDaVenda(moduloLigado(await modulosDaConta(tenantId), 'venda'));
+}
 
 // ──────────────────────────────────────────
 // Types
@@ -1279,6 +1286,10 @@ export async function processarEventoCRM(
     let acao = '';
     /** Fornecedores cujo cadastro o CRM precisa receber de volta (o vínculo). */
     const ecosDeFornecedor: string[] = [];
+    // Versão por agência (14/11/2026, modulos.ts): o que só a versão completa
+    // entende (venda v2, extrato da consolidadora, comissão do mês) chega à
+    // agência simples como chegava antes, pelo caminho de sempre.
+    const modulos = await modulosDaConta(tenantId);
     /** Corpo e status que a rota devolve ao CRM, para o evento que responde no corpo. */
     let resposta: RespostaDaComissaoDoMes | undefined;
 
@@ -1577,13 +1588,16 @@ export async function processarEventoCRM(
         // por forma) entra pelo MESMO modelo e gerador da venda lançada à mão
         // (venda-servidor.ts). A v1 segue exatamente o caminho de sempre,
         // logo abaixo.
-        if (ehVendaV2(payload)) {
+        // Só com o módulo "Venda completa": sem ele, a v2 é lida pelos campos
+        // da v1 que ela também traz (versao_venda no webhook responde [1]).
+        if (vendaV2Aceita(payload, moduloLigado(modulos, 'venda'))) {
           const v2 = await receberVendaV2DoCrm({
             tenantId, payload, vendaId, numero: numeroVenda, dataVenda,
             cliente: { id: clienteId, nome: asStr(payload.cliente_nome), id_externo: clienteExternalId },
             vendedor: vendedorId ? { id: vendedorId, nome: vendedorNome, id_externo: vendedorExternalId } : null,
             grupoId: asStr(payload.entur_grupo_id) || null,
             cabecalho: vendaData,
+            pagoAAgencia: !!(carimbo.plataforma_transacao || carimbo.plataforma_transacoes.length > 0),
           });
           ecosDeFornecedor.push(...v2.ecos);
           if (vendedorPendente) {
@@ -2298,6 +2312,9 @@ export async function processarEventoCRM(
       }
 
       case 'EXTRATO_CONSOLIDADORA': {
+        // Conferência de operadora é do módulo "Extrato automático e
+        // conferência de operadora": sem ele, como na versão simples.
+        if (!moduloLigado(modulos, 'extrato')) { acao = `tipo desconhecido: ${tipo}`; break; }
         // O extrato de comissão que o CRM já lê na Conciliação (E7 frente E):
         // vira uma conferência de operadora A REVISAR. Nada é aplicado
         // sozinho; a comissão de cada linha entra no esperado × recebido.
@@ -2325,6 +2342,8 @@ export async function processarEventoCRM(
       // corpo: criada, atualizada, já existia ou recusada com o motivo
       // (comissao-do-crm-servidor.ts; contrato em docs/integracao-crm.md).
       case TIPO_COMISSAO_DO_MES: {
+        // Comissão do mês é do módulo "Comissões por função": sem ele, como na versão simples.
+        if (!moduloLigado(modulos, 'comissoes')) { acao = `tipo desconhecido: ${tipo}`; break; }
         const r = await receberComissaoDoMes(tenantId, payload, idempotency_key, {
           pessoa: (externalId, dados) => upsertVendedorByExternalId(externalId, dados, tenantId),
         });

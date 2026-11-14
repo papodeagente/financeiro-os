@@ -196,6 +196,8 @@ const porta = servidor.address().port;
 // Agências: A usa CRM e Financeiro com a mesma conta; B usa só o Financeiro.
 
 const A = 'agA', B = 'agB';
+// Versão por agência (14/11/2026): o que este teste prova é da versão COMPLETA (modulos.ts).
+await query(`INSERT INTO tenants (id, data) VALUES ($1, '{"fin_versao":"completa"}'), ($2, '{"fin_versao":"completa"}') ON CONFLICT (id) DO UPDATE SET data = tenants.data || EXCLUDED.data`, [A, B]);
 for (const t of [A, B]) {
   await query(`INSERT INTO contas_bancarias (id, tenant_id, data) VALUES ($1, $2, '{"nome":"Asaas","saldo_inicial":0,"saldo_atual":0}')`, [`${t}-asaas`, t]);
   await salvarConfig(t, 'asaas', { ativo: true, conta_bancaria_id: `${t}-asaas`, emitir_nota: false, credencial: { api_key: `$aact_hmlg_${t}`, segredo_webhook: 'tok' } });

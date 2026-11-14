@@ -50,8 +50,10 @@ const TELAS = [
   'src/app/dashboard/page.tsx',
   'src/app/equipe/folha/page.tsx',
   'src/app/equipe/metas/page.tsx',
-  'src/app/equipe/comissoes/page.tsx',
-  'src/app/equipe/vendedores/page.tsx',
+  // Telas nas duas versões (14/11/2026): a regra vale para a versão completa;
+  // a da versão simples está congelada em TelaSimples (test-telas-simples-congeladas).
+  'src/app/equipe/comissoes/TelaCompleta.tsx',
+  'src/app/equipe/vendedores/TelaCompleta.tsx',
 ];
 
 function ler(caminho: string): string {

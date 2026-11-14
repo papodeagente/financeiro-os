@@ -1,0 +1,678 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { Search, Plus, Pencil, Trash2, X, ChevronDown, Building2, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { FornecedorCRM, TipoFornecedor, createFornecedorCRM } from '@/lib/crm-types';
+import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
+import { PageHeader } from '@/components/PageHeader';
+import { DataTable, DataTableColumn } from '@/components/ui/data-table';
+import { toast } from '@/lib/toast';
+
+const TIPO_OPTIONS: { value: TipoFornecedor; label: string }[] = [
+  { value: 'OPERADORA', label: 'Operadora' },
+  { value: 'CONSOLIDADORA', label: 'Consolidadora' },
+  { value: 'CIA_AEREA', label: 'Cia Aérea' },
+  { value: 'HOTEL', label: 'Hotel' },
+  { value: 'RECEPTIVO', label: 'Receptivo' },
+  { value: 'SEGURADORA', label: 'Seguradora' },
+  { value: 'LOCADORA', label: 'Locadora' },
+  { value: 'CRUZEIRO', label: 'Cruzeiro' },
+  { value: 'OUTROS', label: 'Outros' },
+];
+
+const TIPO_LABEL: Record<TipoFornecedor, string> = Object.fromEntries(
+  TIPO_OPTIONS.map(({ value, label }) => [value, label])
+) as Record<TipoFornecedor, string>;
+
+const TIPO_COLOR: Record<TipoFornecedor, string> = {
+  OPERADORA: 'bg-[var(--t-blue-bg)]0/20 text-[var(--fin-accent)] border-[var(--fin-accent)]/30',
+  CONSOLIDADORA: 'bg-[var(--fin-violet-soft)] text-[var(--fin-violet)] border-[var(--fin-violet)]/30',
+  CIA_AEREA: 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)] border-[var(--fin-accent)]/30',
+  HOTEL: 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)] border-[var(--fin-warning)]/30',
+  RECEPTIVO: 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)] border-[var(--fin-positive)]/30',
+  SEGURADORA: 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)] border-[var(--fin-accent)]/30',
+  LOCADORA: 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)] border-[var(--fin-warning)]/30',
+  CRUZEIRO: 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)] border-[var(--fin-positive)]/30',
+  OUTROS: 'bg-[var(--t-surface-hover)]0/20 text-[var(--t-text-secondary)] border-[var(--t-border)]/30',
+};
+
+export default function FornecedoresPage() {
+  const [fornecedores, setFornecedores] = useState<FornecedorCRM[]>([]);
+  const [search, setSearch] = useState('');
+  const [filterTipo, setFilterTipo] = useState<TipoFornecedor | ''>('');
+  const [filterStatus, setFilterStatus] = useState<'' | 'ATIVO' | 'INATIVO'>('');
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<FornecedorCRM>(createFornecedorCRM());
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const data = await loadEntities<FornecedorCRM>('fornecedores-crm');
+    // Cadastro que veio do CRM antes de 09/10/2026 tinha só nome e CNPJ: sem
+    // os outros campos, a busca e o formulário quebravam ao ler o e-mail.
+    setFornecedores(data.map(f => ({ ...createFornecedorCRM(), ...f })));
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Integração com o CRM ligada: os cadastros vão e vêm sozinhos, e o botão
+  // de sincronizar acerta tudo de uma vez (primeira vez, ou aviso perdido).
+  const [crmAtivo, setCrmAtivo] = useState(false);
+  const [sincronizando, setSincronizando] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    fetch('/api/v1/crm/status')
+      .then(r => (r.ok ? r.json() : null))
+      .then(s => { if (vivo) setCrmAtivo(s?.ativo === true); })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, []);
+
+  const sincronizar = async () => {
+    setSincronizando(true);
+    try {
+      const r = await fetch('/api/fornecedores-crm/sincronizar', { method: 'POST' });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        toast.error('Não foi possível sincronizar com o CRM.', j.error ?? '');
+        return;
+      }
+      toast.success(`${j.enviados} fornecedores enviados ao CRM. Os de lá chegam em instantes.`);
+      setTimeout(() => { void load(); }, 6000);
+    } finally {
+      setSincronizando(false);
+    }
+  };
+
+  const filtered = fornecedores.filter((f) => {
+    const q = search.toLowerCase();
+    const matchSearch =
+      !q ||
+      f.nome_fantasia.toLowerCase().includes(q) ||
+      f.razao_social.toLowerCase().includes(q) ||
+      f.cnpj.includes(q) ||
+      f.email.toLowerCase().includes(q);
+    const matchTipo = !filterTipo || f.tipo === filterTipo;
+    const matchStatus = !filterStatus || f.status === filterStatus;
+    return matchSearch && matchTipo && matchStatus;
+  });
+
+  const openNew = () => {
+    setForm(createFornecedorCRM());
+    setEditingId(null);
+    setShowForm(true);
+  };
+
+  const openEdit = (f: FornecedorCRM) => {
+    setForm({ ...f });
+    setEditingId(f.id);
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+  };
+
+  const handleSave = async () => {
+    const displayName = form.nome_fantasia.trim() || form.razao_social.trim();
+    if (!displayName) return;
+    setSaving(true);
+    try {
+      if (editingId) {
+        const updated = await updateEntity<FornecedorCRM>('fornecedores-crm', form);
+        setFornecedores((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
+      } else {
+        const created = await saveEntity<FornecedorCRM>('fornecedores-crm', form);
+        setFornecedores((prev) => [created, ...prev]);
+      }
+      closeForm();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    await deleteEntity('fornecedores-crm', id);
+    setFornecedores((prev) => prev.filter((f) => f.id !== id));
+    setConfirmDelete(null);
+  };
+
+  const setField = <K extends keyof FornecedorCRM>(key: K, value: FornecedorCRM[K]) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
+
+  const canSave = !!(form.nome_fantasia.trim() || form.razao_social.trim());
+
+  const columns: DataTableColumn<FornecedorCRM>[] = [
+    {
+      key: 'nome',
+      header: 'Nome',
+      sortable: true,
+      sortAccessor: f => (f.nome_fantasia || f.razao_social || '').toLowerCase(),
+      cell: f => (
+        <div>
+          <div className="font-medium text-[var(--t-text)]">{f.nome_fantasia || f.razao_social}</div>
+          {/* Cadastro vindo do CRM tem a razão social igual ao nome: não repete. */}
+          {f.nome_fantasia && f.razao_social && f.razao_social.trim() !== f.nome_fantasia.trim() && (
+            <div className="text-xs text-[var(--t-text-secondary)]">{f.razao_social}</div>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'cnpj',
+      header: 'CNPJ',
+      headerClassName: 'hidden sm:table-cell',
+      className: 'hidden sm:table-cell',
+      cell: f => <span className="text-[var(--t-text-secondary)]">{f.cnpj}</span>,
+    },
+    {
+      key: 'tipo',
+      header: 'Tipo',
+      cell: f => (
+        <Badge className={`${TIPO_COLOR[f.tipo]} text-xs hover:${TIPO_COLOR[f.tipo]}`}>
+          {TIPO_LABEL[f.tipo]}
+        </Badge>
+      ),
+    },
+    {
+      key: 'telefone',
+      header: 'Telefone',
+      headerClassName: 'hidden md:table-cell',
+      className: 'hidden md:table-cell',
+      cell: f => <span className="text-[var(--t-text-secondary)]">{f.telefone}</span>,
+    },
+    {
+      key: 'email',
+      header: 'E-mail',
+      headerClassName: 'hidden lg:table-cell',
+      className: 'hidden lg:table-cell',
+      cell: f => <span className="text-[var(--t-text-secondary)]">{f.email}</span>,
+    },
+    {
+      key: 'comissao',
+      header: 'Comissão',
+      headerClassName: 'hidden lg:table-cell',
+      className: 'hidden lg:table-cell',
+      cell: f => (
+        <span className="text-[var(--t-text-secondary)]">
+          {f.regras_faturamento?.comissao_padrao
+            ? `${f.regras_faturamento.comissao_padrao}%`
+            : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'cidade',
+      header: 'Cidade/UF',
+      headerClassName: 'hidden xl:table-cell',
+      className: 'hidden xl:table-cell',
+      cell: f => (
+        <span className="text-[var(--t-text-secondary)]">
+          {[f.cidade, f.estado].filter(Boolean).join(' / ')}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: f => (
+        <Badge
+          className={
+            f.status === 'ATIVO'
+              ? 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)] border-[var(--fin-positive)]/30 hover:bg-[var(--fin-positive-soft)]'
+              : 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)] border-[var(--fin-negative)]/30 hover:bg-[var(--fin-negative-soft)]'
+          }
+        >
+          {f.status}
+        </Badge>
+      ),
+    },
+    {
+      key: 'acoes',
+      header: '',
+      align: 'right',
+      cell: f => (
+        <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => openEdit(f)}
+            className="p-1.5 rounded hover:bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-[var(--t-accent)] transition-colors"
+          >
+            <Pencil size={14} />
+          </button>
+          {confirmDelete === f.id ? (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => handleDelete(f.id)}
+                className="px-2 py-1 rounded bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)] text-xs hover:bg-[var(--fin-negative)]/30"
+              >
+                Confirmar
+              </button>
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="px-2 py-1 rounded bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] text-xs"
+              >
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(f.id)}
+              className="p-1.5 rounded hover:bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-[var(--fin-negative-text)] transition-colors"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="w-full bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
+      <PageHeader
+        icon={<Building2 />}
+        title="Fornecedores"
+        subtitle={`${fornecedores.length} fornecedor${fornecedores.length !== 1 ? 'es' : ''} cadastrado${fornecedores.length !== 1 ? 's' : ''}`}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {crmAtivo && (
+              <Button variant="outline" onClick={sincronizar} disabled={sincronizando} className="gap-2">
+                <RefreshCw size={16} aria-hidden="true" className={sincronizando ? 'animate-spin' : undefined} />
+                {sincronizando ? 'Sincronizando...' : 'Sincronizar com o CRM'}
+              </Button>
+            )}
+            <Button
+              onClick={openNew}
+              className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--fin-text-on-fill)] font-semibold gap-2"
+            >
+              <Plus size={16} /> Novo Fornecedor
+            </Button>
+          </div>
+        }
+      />
+
+      {/* Filters */}
+      <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)] mb-4">
+        <CardContent className="p-4 flex flex-wrap gap-3">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--t-text-secondary)]" />
+            <Input
+              className="pl-9 bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] placeholder:text-[var(--t-text-secondary)]"
+              placeholder="Buscar por nome ou CNPJ..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="relative">
+            <select
+              className="appearance-none bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)]"
+              value={filterTipo}
+              onChange={(e) => setFilterTipo(e.target.value as TipoFornecedor | '')}
+            >
+              <option value="">Todos os tipos</option>
+              {TIPO_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--t-text-secondary)] pointer-events-none" />
+          </div>
+          <div className="relative">
+            <select
+              className="appearance-none bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)]"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as '' | 'ATIVO' | 'INATIVO')}
+            >
+              <option value="">Todos os status</option>
+              <option value="ATIVO">Ativo</option>
+              <option value="INATIVO">Inativo</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--t-text-secondary)] pointer-events-none" />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Inline Form */}
+      {showForm && (
+        <Card className="bg-[var(--t-header-bg)] border-[var(--t-accent)]/40 mb-4">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-semibold text-[var(--t-accent)]">
+                {editingId ? 'Editar Fornecedor' : 'Novo Fornecedor'}
+              </h2>
+              <button onClick={closeForm} className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)]">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Tipo */}
+              <div>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Tipo *</label>
+                <select
+                  className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)]"
+                  value={form.tipo}
+                  onChange={(e) => setField('tipo', e.target.value as TipoFornecedor)}
+                >
+                  {TIPO_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Razão Social */}
+              <div>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Razão Social</label>
+                <Input
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+                  value={form.razao_social}
+                  onChange={(e) => setField('razao_social', e.target.value)}
+                />
+              </div>
+
+              {/* Nome Fantasia */}
+              <div>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Nome Fantasia *</label>
+                <Input
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+                  value={form.nome_fantasia}
+                  onChange={(e) => setField('nome_fantasia', e.target.value)}
+                />
+              </div>
+
+              {/* CNPJ */}
+              <div>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">CNPJ</label>
+                <Input
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+                  value={form.cnpj}
+                  onChange={(e) => setField('cnpj', e.target.value)}
+                />
+              </div>
+
+              {/* Telefone */}
+              <div>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Telefone</label>
+                <Input
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+                  value={form.telefone}
+                  onChange={(e) => setField('telefone', e.target.value)}
+                />
+              </div>
+
+              {/* WhatsApp */}
+              <div>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">WhatsApp</label>
+                <Input
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+                  value={form.whatsapp}
+                  onChange={(e) => setField('whatsapp', e.target.value)}
+                />
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">E-mail</label>
+                <Input
+                  type="email"
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+                  value={form.email}
+                  onChange={(e) => setField('email', e.target.value)}
+                />
+              </div>
+
+              {/* Site */}
+              <div>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Site</label>
+                <Input
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+                  placeholder="https://"
+                  value={form.site}
+                  onChange={(e) => setField('site', e.target.value)}
+                />
+              </div>
+
+              {/* Contato Principal */}
+              <div>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Contato Principal</label>
+                <Input
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+                  value={form.contato_principal}
+                  onChange={(e) => setField('contato_principal', e.target.value)}
+                />
+              </div>
+
+              {/* Endereço Completo */}
+              <div className="sm:col-span-2">
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Endereço Completo</label>
+                <Input
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+                  value={form.endereco_completo}
+                  onChange={(e) => setField('endereco_completo', e.target.value)}
+                />
+              </div>
+
+              {/* Cidade */}
+              <div>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Cidade</label>
+                <Input
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+                  value={form.cidade}
+                  onChange={(e) => setField('cidade', e.target.value)}
+                />
+              </div>
+
+              {/* Estado */}
+              <div>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Estado</label>
+                <Input
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+                  value={form.estado}
+                  onChange={(e) => setField('estado', e.target.value)}
+                  maxLength={2}
+                />
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Status</label>
+                <select
+                  className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)]"
+                  value={form.status}
+                  onChange={(e) => setField('status', e.target.value as 'ATIVO' | 'INATIVO')}
+                >
+                  <option value="ATIVO">Ativo</option>
+                  <option value="INATIVO">Inativo</option>
+                </select>
+              </div>
+
+              {/* Observações */}
+              <div className="sm:col-span-2 lg:col-span-3">
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Observações</label>
+                <textarea
+                  className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)] resize-none"
+                  rows={3}
+                  value={form.observacoes}
+                  onChange={(e) => setField('observacoes', e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Condições de comissão */}
+            <div className="mt-6 pt-4 border-t border-[var(--t-border)]">
+              <h3 className="text-sm font-semibold text-[var(--t-text)] mb-3">Condições de comissão</h3>
+              {/* Vendas do CRM (regra de 13/11/2026): por padrão a agência
+                  recebe do cliente e paga este fornecedor. Marcar aqui é a
+                  exceção: o cliente paga o fornecedor direto e nasce só a
+                  comissão a receber dele. */}
+              <div className="mb-4 max-w-xl">
+                <label className="flex items-start gap-2 text-sm text-[var(--t-text)] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 size-4 accent-[var(--fin-accent)]"
+                    checked={form.recebe_direto_do_cliente === true}
+                    onChange={(e) => setField('recebe_direto_do_cliente', e.target.checked)}
+                  />
+                  <span>Este fornecedor recebe direto do cliente</span>
+                </label>
+                <p className="mt-1 text-xs text-[var(--t-text-secondary)]">
+                  {form.recebe_direto_do_cliente === true
+                    ? 'Nas vendas do CRM nasce só a comissão a receber deste fornecedor: a margem da venda.'
+                    : 'Nas vendas do CRM nasce a conta a receber do cliente e a conta a pagar deste fornecedor.'}
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Comissão padrão (%)</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.1}
+                    className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+                    value={form.regras_faturamento.comissao_padrao || ''}
+                    onChange={(e) =>
+                      setForm(prev => ({
+                        ...prev,
+                        regras_faturamento: { ...prev.regras_faturamento, comissao_padrao: parseFloat(e.target.value) || 0 },
+                      }))
+                    }
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Regra de vencimento</label>
+                  <select
+                    className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)]"
+                    value={form.regras_faturamento.regra_vencimento_comissao?.tipo || ''}
+                    onChange={(e) => {
+                      const tipo = e.target.value as 'dia_fixo_mes' | 'dias_apos_venda' | '';
+                      setForm(prev => ({
+                        ...prev,
+                        regras_faturamento: {
+                          ...prev.regras_faturamento,
+                          regra_vencimento_comissao: tipo
+                            ? { tipo, valor: prev.regras_faturamento.regra_vencimento_comissao?.valor ?? (tipo === 'dia_fixo_mes' ? 15 : 30) }
+                            : undefined,
+                        },
+                      }));
+                    }}
+                  >
+                    <option value="">Padrão (30 dias)</option>
+                    <option value="dia_fixo_mes">Dia fixo do mês</option>
+                    <option value="dias_apos_venda">Dias após a venda</option>
+                  </select>
+                </div>
+
+                {form.regras_faturamento.regra_vencimento_comissao && (
+                  <div>
+                    <label className="block text-xs text-[var(--t-text-secondary)] mb-1">
+                      {form.regras_faturamento.regra_vencimento_comissao.tipo === 'dia_fixo_mes' ? 'Dia do mês (1-28)' : 'Quantidade de dias'}
+                    </label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={form.regras_faturamento.regra_vencimento_comissao.tipo === 'dia_fixo_mes' ? 28 : 365}
+                      className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+                      value={form.regras_faturamento.regra_vencimento_comissao.valor}
+                      onChange={(e) =>
+                        setForm(prev => ({
+                          ...prev,
+                          regras_faturamento: {
+                            ...prev.regras_faturamento,
+                            regra_vencimento_comissao: {
+                              ...prev.regras_faturamento.regra_vencimento_comissao!,
+                              valor: parseInt(e.target.value) || 0,
+                            },
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                )}
+
+                {form.regras_faturamento.comissao_padrao > 0 && (
+                  <div className="flex items-end">
+                    <p className="text-xs text-[var(--t-text-muted)] bg-[var(--t-surface-hover)] rounded-md px-3 py-2">
+                      Para uma venda hoje, vencimento seria:{' '}
+                      <span className="font-medium text-[var(--t-text)]">
+                        {(() => {
+                          const hoje = new Date().toISOString().split('T')[0];
+                          const regra = form.regras_faturamento.regra_vencimento_comissao;
+                          if (!regra) {
+                            const d = new Date(); d.setDate(d.getDate() + 30);
+                            return d.toLocaleDateString('pt-BR');
+                          }
+                          if (regra.tipo === 'dias_apos_venda') {
+                            const d = new Date(hoje + 'T12:00:00'); d.setDate(d.getDate() + regra.valor);
+                            return d.toLocaleDateString('pt-BR');
+                          }
+                          const d = new Date(hoje + 'T12:00:00');
+                          const dia = Math.min(regra.valor, 28);
+                          let mes = d.getMonth() + 1; let ano = d.getFullYear();
+                          if (mes > 11) { mes = 0; ano++; }
+                          return new Date(ano, mes, dia).toLocaleDateString('pt-BR');
+                        })()}
+                      </span>
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Form Actions */}
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-[var(--t-border)]">
+              <Button
+                variant="outline"
+                className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]"
+                onClick={closeForm}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--fin-text-on-fill)] font-semibold min-w-[100px]"
+                onClick={handleSave}
+                disabled={saving || !canSave}
+              >
+                {saving ? 'Salvando...' : editingId ? 'Atualizar' : 'Salvar'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Table */}
+      <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
+        <CardContent className="p-0">
+          <DataTable<FornecedorCRM>
+            columns={columns}
+            data={filtered}
+            loading={loading}
+            rowKey={f => f.id}
+            zebra
+            emptyState={{
+              icon: <Building2 size={40} className="opacity-30" />,
+              title: 'Nenhum fornecedor encontrado',
+              description: 'Cadastre um novo fornecedor ou ajuste os filtros de busca.',
+            }}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Summary */}
+      {!loading && filtered.length > 0 && (
+        <p className="text-xs text-[var(--t-text-secondary)] mt-3 text-right">
+          Exibindo {filtered.length} de {fornecedores.length} fornecedor{fornecedores.length !== 1 ? 'es' : ''}
+        </p>
+      )}
+    </div>
+  );
+}
