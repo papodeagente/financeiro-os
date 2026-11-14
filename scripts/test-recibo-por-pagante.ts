@@ -157,5 +157,20 @@ eq([fiscal.notas[2].link_pdf, fiscal.notas[1].link_pdf, fiscal.notas[1].erro, fi
 eq([fiscal.totais.autorizado, fiscal.totais.em_andamento], [150, 40], 'totais: autorizado e na prefeitura');
 eq([fiscal.retencoes.length, fiscal.retencoes[0].liquido, fiscal.totais.retido, fiscal.totais.COFINS], [1, 938.5, 61.5, 30], 'retenção só das contas vivas e com valor');
 
+// Identidade da agência no recibo da versão completa (14/11/2026): as cores
+// do cadastro, como no recibo da versão simples (marca-da-agencia.ts).
+{
+  const { marcaDoRecibo } = await import('../src/lib/recibo-por-pagante.ts');
+  const comCores = { ...agencia, logo: 'https://x/logo.png', cores: { primaria: '#ffcc00', destaque: '#123' } } as typeof agencia;
+  const m = marcaDoRecibo(comCores);
+  eq([m.primaria, m.destaque, m.textoSobrePrimaria], ['#FFCC00', '#112233', '#111827'], 'recibo completo: cores da agência, com texto legível sobre a principal');
+  eq(marcaDoRecibo(agencia).primaria, '#004AAD', 'sem cor cadastrada: o padrão');
+  eq(marcaDoRecibo({ ...agencia, cores: { primaria: 'red; background:url(x)' } } as typeof agencia).primaria, '#004AAD', 'cor fora do formato não vira CSS');
+  const rv = montarReciboDaVenda({ agencia: comCores, venda, contas, creditos_usados: new Set(['g2']), documentos: {}, config: normalizarConfigDoRecibo(null), hoje: '2026-11-21' });
+  eq(rv.ok ? [rv.recibo.marca.primaria, rv.recibo.emitente.logo] : null, ['#FFCC00', 'https://x/logo.png'], 'o recibo da venda leva o logo e as cores');
+  const rf2 = montarReciboDaFatura({ agencia: comCores, fatura, vendas: [], documento: '', baixas: [bf('x1', '2026-11-16', 1000)], hoje: '2026-11-21' });
+  eq(rf2.ok ? rf2.recibo.marca.primaria : null, '#FFCC00', 'o recibo da fatura também');
+}
+
 console.log(`\n${total - falhas}/${total} passaram`);
 if (falhas) process.exit(1);
