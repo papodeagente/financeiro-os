@@ -91,6 +91,9 @@ const inserir = (tabela, id, t, data, extra = {}) => {
 
 // ---------------------------------------------------------------------------
 console.log('--- 1. Migração dos textos livres de centro ---');
+// Versão por agência (14/11/2026): o rateio conferido no PUT é da versão COMPLETA (modulos.ts).
+await query(`CREATE TABLE IF NOT EXISTS tenants (id TEXT PRIMARY KEY, numero INTEGER, data JSONB NOT NULL DEFAULT '{}'::jsonb)`);
+await query(`INSERT INTO tenants (id, data) VALUES ('t1', '{"fin_versao":"completa"}'), ('t2', '{"fin_versao":"completa"}') ON CONFLICT (id) DO NOTHING`);
 await inserir('centros_custo', 'antigo', 't1', { nome: 'Loja SP', ativo: true }, { nome: 'Loja SP' });
 await inserir('contas_pagar', 'cpA', 't1', { valor_final: 100, centro_custo: 'loja sp ', status: 'PENDENTE', fornecedor_nome: 'A', data_vencimento: '2026-11-10' });
 await inserir('contas_pagar', 'cpB', 't1', { valor_final: 50, centro_custo: 'Marketing', status: 'PENDENTE', fornecedor_nome: 'B', data_vencimento: '2026-11-11' });

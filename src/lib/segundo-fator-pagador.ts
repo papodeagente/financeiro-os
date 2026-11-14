@@ -21,7 +21,13 @@
  *   - SEGUNDO_FATOR_PAGADOR=0 desliga a exigência para quem não é
  *     administrador (escape de emergência; o administrador segue exigido).
  *
- * Puro (sem banco e sem Next): a rota decide com `situacaoDoPagador`.
+ * Versão por agência (14/11/2026): a exigência é da versão COMPLETA. Só vale
+ * na agência com o módulo "Núcleo completo" (modulos.ts); na versão simples,
+ * pagar e transferir seguem como sempre (`nucleo: false` → livre). O
+ * administrador continua com o código no login nas duas (./segundo-fator).
+ *
+ * Puro (sem banco e sem Next): a rota decide com `situacaoDoPagador`; quem lê
+ * o módulo da agência é segundo-fator-pagador-servidor.ts.
  */
 import { nuncaRestringido } from './acoes-financeiras';
 
@@ -46,6 +52,11 @@ export interface QuemPaga {
   isSuperAdmin?: boolean;
   /** Segundo fator provado nesta sessão (login com código ou cadastro agora). */
   sf?: boolean;
+  /**
+   * A agência tem o núcleo completo? `false` = versão simples: livre.
+   * Ausente = como antes (exige), para quem ainda não informa.
+   */
+  nucleo?: boolean;
 }
 
 export type SituacaoDoPagador = 'livre' | 'aviso' | 'bloqueio';
@@ -55,6 +66,7 @@ export type SituacaoDoPagador = 'livre' | 'aviso' | 'bloqueio';
  * passaram pelo código no login: livres. Quem provou o código: livre.
  */
 export function situacaoDoPagador(quem: QuemPaga, regra: RegraDoPagador, hoje: string): SituacaoDoPagador {
+  if (quem.nucleo === false) return 'livre';
   if (nuncaRestringido(quem)) return 'livre';
   if (quem.sf === true) return 'livre';
   if (!regra.ligado) return 'livre';

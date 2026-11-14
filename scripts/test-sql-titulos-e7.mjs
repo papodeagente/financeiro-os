@@ -101,6 +101,9 @@ const CRR = await import('../src/app/api/contas-receber/[id]/restaurar/route.ts'
 
 const T = 'ag-1';
 const T2 = 'ag-2';
+// Versão por agência (14/11/2026): o que este teste prova é da versão COMPLETA (modulos.ts).
+await query(`CREATE TABLE IF NOT EXISTS tenants (id TEXT PRIMARY KEY, numero INTEGER, data JSONB NOT NULL DEFAULT '{}'::jsonb)`);
+await query(`INSERT INTO tenants (id, data) VALUES ($1, '{"fin_versao":"completa"}'), ($2, '{"fin_versao":"completa"}') ON CONFLICT (id) DO NOTHING`, [T, T2]);
 const sessao = (perfil, userId = `u-${perfil}`, tenant = T) => ({ userId, nome: `Pessoa ${userId}`, email: 'p@x.com', perfil, permissoes: {}, tenantId: tenant, tenantSlug: tenant });
 const como = s => { globalThis.__SESSAO_DE_TESTE__ = s; P.invalidarPermissoes?.(); };
 const req = (url, metodo = 'GET', corpo, chave) => new Request(`http://localhost${url}`, {
@@ -285,6 +288,49 @@ r = await json(await CP.POST(req('/api/contas-pagar', 'POST', { id: 'cp2', forne
 eq(r.status, 400, 'campo com identificador inválido: recusado');
 r = await json(await CPI.PUT(req('/api/contas-pagar/cp1', 'PUT', { ...(await titulo('contas_pagar', 'cp1')), campos_personalizados: { pedido: { obj: 1 } } }), ctx('cp1')));
 eq(r.status, 400, 'PUT com valor que não é texto/número/sim-não: recusado');
+
+console.log('--- 6. Agência na versão SIMPLES (sem o núcleo): o PUT e o DELETE de a9fd7cf ---');
+{
+  const { esquecerModulos } = await import('../src/lib/modulos-servidor.ts');
+  await query(`UPDATE tenants SET data = '{}' WHERE id = $1`, [T]);
+  esquecerModulos();
+  como(sessao('ADMIN'));
+  await cp('vs1', { valor_final: 50, data_vencimento: D(4), observacoes: '' });
+  const lidaS = (await json(await CPI.GET(req('/api/contas-pagar/vs1'), ctx('vs1')))).corpo;
+  await query(`UPDATE contas_pagar SET updated_at = NOW() + INTERVAL '1 second' WHERE id = 'vs1'`);
+  r = await json(await CPI.PUT(req('/api/contas-pagar/vs1', 'PUT', { ...lidaS, observacoes: 'tela de sempre' }), ctx('vs1')));
+  eq([r.status, (await titulo('contas_pagar', 'vs1')).observacoes], [200, 'tela de sempre'], 'simples: sem aviso de edição simultânea (grava como em a9fd7cf)');
+  await cr('vs-venda', { valor_final: 900, cliente_id: 'cli-1', cliente_nome: 'Carla', data_vencimento: D(20), origem_venda_id: 'venda-8' });
+  r = await json(await CRI.PUT(req('/api/contas-receber/vs-venda', 'PUT', { ...(await titulo('contas_receber', 'vs-venda')), valor_final: 800, data_vencimento: D(25) }), ctx('vs-venda')));
+  eq([r.status, (await titulo('contas_receber', 'vs-venda')).valor_final], [200, 800], 'simples: sem trava da conta que veio de venda');
+  r = await json(await CPI.PUT(req('/api/contas-pagar/vs1', 'PUT', { ...(await titulo('contas_pagar', 'vs1')), data_emissao: D(30) }), ctx('vs1')));
+  eq(r.status, 200, 'simples: emissão não é conferida');
+  r = await json(await CP.POST(req('/api/contas-pagar', 'POST', { id: 'vs-post', fornecedor_nome: 'Z', valor_final: 5, status: 'PENDENTE', data_emissao: D(9), data_vencimento: D(1) })));
+  eq(r.status, 200, 'simples: o cadastro também não confere a emissão (como em a9fd7cf)');
+  const antes = await saldoDaConta('b2');
+  r = await json(await CPI.PUT(req('/api/contas-pagar/vs1', 'PUT', { ...(await titulo('contas_pagar', 'vs1')), status: 'PAGO', valor_pago: 50, data_pagamento: HOJE, conta_bancaria_id: 'b2' }), ctx('vs1')));
+  eq([r.status, 'aviso_segundo_fator' in r.corpo, await saldoDaConta('b2')], [200, false, antes - 50], 'simples: pagar pela edição move o caixa, sem pedir o código de quem paga');
+  r = await json(await CPI.PUT(req('/api/contas-pagar/vs1', 'PUT', { ...(await titulo('contas_pagar', 'vs1')), status: 'PENDENTE', valor_pago: null, data_pagamento: null }), ctx('vs1')));
+  eq([r.status, await saldoDaConta('b2')], [409, antes - 50], 'simples também: salvar PENDENTE por cima da baixa sem saber dela é recusado (correção de segurança, vale nas duas)');
+  r = await json(await CPI.DELETE(req('/api/contas-pagar/vs1', 'DELETE'), ctx('vs1')));
+  eq([r.status, r.corpo, await saldoDaConta('b2'), await titulo('contas_pagar', 'vs1')], [200, { ok: true }, antes, undefined], 'simples: excluir devolve o dinheiro e responde { ok: true }, como sempre');
+  eq(await razaoBate(), [], 'o caixa da agência simples continua passando pelo razão (o razão bate)');
+
+  // Fornecedor informado numa conta pendente de item da Cotação volta ao CRM
+  // (FORNECEDOR_DO_ITEM) pela própria edição da conta, nas duas versões.
+  await query(`CREATE TABLE IF NOT EXISTS vendas_crm (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT '', cliente_id TEXT NOT NULL DEFAULT '', vendedor_id TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'orcamento', data JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+  await query(`CREATE TABLE IF NOT EXISTS fornecedores_crm (id TEXT PRIMARY KEY, nome_fantasia TEXT NOT NULL DEFAULT '', cnpj TEXT NOT NULL DEFAULT '', categoria TEXT NOT NULL DEFAULT '', data JSONB NOT NULL, external_id TEXT, crm_supplier_id TEXT, crm_atualizado_em TIMESTAMPTZ, tenant_id TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+  await query(`CREATE TABLE IF NOT EXISTS crm_eventos_saida (id TEXT PRIMARY KEY, tipo TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'PENDENTE', tentativas INTEGER NOT NULL DEFAULT 0, proxima_tentativa TIMESTAMPTZ, latencia_ms INTEGER, data JSONB NOT NULL, tenant_id TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+  await query(`CREATE TABLE IF NOT EXISTS crm_config (id TEXT NOT NULL, tenant_id TEXT NOT NULL DEFAULT '', data JSONB NOT NULL, PRIMARY KEY (id, tenant_id))`);
+  await query(`INSERT INTO vendas_crm (id, tenant_id, data) VALUES ('venda-cot', $1, '{"crm_venda_id":"crm_deal_77"}')`, [T]);
+  await query(`INSERT INTO fornecedores_crm (id, tenant_id, nome_fantasia, crm_supplier_id, data) VALUES ('f-cot', $1, 'Barco Azul', '55', '{"nome_fantasia":"Barco Azul"}')`, [T]);
+  await cp('cot1', { valor_final: 300, data_vencimento: D(10), origem_venda_id: 'venda-cot', fornecedor_pendente: true, fornecedor_id: '', fornecedor_nome: '', crm_item_ids: [103] });
+  r = await json(await CPI.PUT(req('/api/contas-pagar/cot1', 'PUT', { ...(await titulo('contas_pagar', 'cot1')), fornecedor_id: 'f-cot', fornecedor_nome: 'Barco Azul', fornecedor_pendente: false }), ctx('cot1')));
+  await new Promise(ok => setTimeout(ok, 200));
+  const volta = (await query(`SELECT data FROM crm_eventos_saida WHERE tenant_id = $1 AND tipo = 'FORNECEDOR_DO_ITEM'`, [T])).rows.map(x => x.data.payload ?? x.data);
+  eq([r.status, volta.map(v => [v.crm_venda_id, v.crm_item_ids, v.fornecedor?.nome])], [200, [['crm_deal_77', [103], 'Barco Azul']]],
+    'informar o fornecedor pela edição da conta avisa o CRM (FORNECEDOR_DO_ITEM)');
+}
 
 console.log(`\n${total - falhas}/${total} passaram`);
 process.exit(falhas ? 1 : 0);

@@ -9,6 +9,17 @@
  *     estorno de caixa de sempre) e pode devolver `aviso`;
  *   - POST .../restaurar traz a conta de volta, em aberto.
  *
+ * Versão por agência (14/11/2026, modulos.ts): a agência SEM o núcleo
+ * completo recebe o PUT da versão simples (sem versão lida, sem trava da conta
+ * de venda, sem conferir emissão, moeda e campos personalizados, sem pedir o
+ * código de quem paga), com o caixa pelo mesmo caminho (linha travada e
+ * razão). As guardas de acesso e a recusa de salvar por cima de uma baixa
+ * feita por outra pessoa (auditoria de 04/11) valem nas duas (segurança). A exclusão é a
+ * mesma (o dinheiro volta, a conta sai das listas); a resposta da simples é
+ * só `{ ok: true }`, como sempre foi.
+ * Nas duas, informar o fornecedor numa conta a pagar pendente de item da
+ * Cotação do CRM avisa o CRM (FORNECEDOR_DO_ITEM, fornecedor-do-item.ts).
+ *
  * PUT detecta a transição de status para sincronizar o saldo (ver
  * src/lib/baixa-de-conta.ts): baixa move o caixa na conta escolhida; desfazer
  * estorna na conta que pagou/recebeu (a gravada, nunca a do pedido); trocar a
@@ -19,7 +30,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from './db';
 import { getTenantId } from './tenant';
 import { getSession } from './auth';
-import { conferirSegundoFatorDoPagador, recusaFinanceira, recusaExclusao, respostaPeriodoFechado } from './guarda-rota';
+import { recusaFinanceira, recusaExclusao, respostaPeriodoFechado } from './guarda-rota';
 import { recusaDaContaNaGravacao } from './conta-da-gravacao';
 import { emTransacao, ErroMovimentoCaixa, type ExecutorSQL } from './caixa-atomico';
 import { editarConta, ErroEdicaoConta } from './baixa-de-conta';
@@ -36,6 +47,9 @@ import { empresasDoRegistro } from './empresas';
 import { conferirMoedaDoCadastro } from './moedas';
 import { lerCatalogoDaAgencia } from './moedas-servidor';
 import { recusaDosObrigatorios } from './campos-personalizados-servidor';
+import { temModulo } from './modulos-servidor';
+import { conferirSegundoFatorDoPagadorDaConta } from './segundo-fator-pagador-servidor';
+import { avisarFornecedorDoItem } from './fornecedor-do-item';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -63,9 +77,11 @@ function erroGenerico(e: unknown) {
  * Confere e arruma o título antes de gravar pelo POST (cadastro) — o mesmo
  * que o PUT confere: rateio, campos personalizados e emissão.
  */
-export function validarCadastroDoTitulo(tabela: TabelaDoTitulo) {
+export function validarCadastroDoTitulo(_tabela: TabelaDoTitulo) {
+  // A emissão é conferida em conferirTituloNoServidor, que sabe a versão da
+  // agência (a versão simples não confere a emissão, como em a9fd7cf).
   return (item: Record<string, unknown>): string | null =>
-    sanearCamposPersonalizadosDoItem(item) ?? prepararDimensoesDaConta(item) ?? conferirEmissaoDaConta(tabela, item);
+    sanearCamposPersonalizadosDoItem(item) ?? prepararDimensoesDaConta(item);
 }
 
 /**
@@ -95,7 +111,12 @@ async function recusaDaMoeda(
  */
 export function conferirTituloNoServidor(tabela: TabelaDoTitulo) {
   return async (tenantId: string, item: Record<string, unknown>): Promise<string | null> => {
-    if (!pool) return null;
+    if (!pool) return conferirEmissaoDaConta(tabela, item);
+    // Versão simples (14/11/2026): o cadastro da conta segue a tela de
+    // sempre, sem conferir emissão, moeda pelo catálogo nem campos obrigatórios.
+    if (!(await temModulo(tenantId, 'nucleo'))) return null;
+    const emissao = conferirEmissaoDaConta(tabela, item);
+    if (emissao) return emissao;
     const exec = pool as unknown as ExecutorSQL;
     const moeda = await recusaDaMoeda(exec, tenantId, tabela, item.id, item);
     if (moeda) return moeda;
@@ -135,18 +156,21 @@ export function rotasDoTitulo(tabela: TabelaDoTitulo) {
       if (!item || typeof item !== 'object' || Array.isArray(item)) {
         return NextResponse.json({ error: 'Formato inválido' }, { status: 400 });
       }
+      const tenantId = await getTenantId();
+      // Versão da agência: sem o núcleo completo, as regras da tela de sempre.
+      const completa = !pool || await temModulo(tenantId, 'nucleo');
       // Campos personalizados e rateio conferidos antes de tudo (05-06/11/2026).
-      const invalido = sanearCamposPersonalizadosDoItem(item as Record<string, unknown>)
-        ?? prepararDimensoesDaConta(item as Record<string, unknown>);
+      const invalido = completa
+        ? sanearCamposPersonalizadosDoItem(item as Record<string, unknown>) ?? prepararDimensoesDaConta(item as Record<string, unknown>)
+        : null;
       if (invalido) return NextResponse.json({ error: invalido }, { status: 400 });
       if (!pool) return NextResponse.json(item);
-      const tenantId = await getTenantId();
       if (await foraDasEmpresas(tabela, id)) return NAO_ACHADO();
       // Moeda pelo catálogo da agência e campos obrigatórios da empresa do
       // título (E7, frente D). O obrigatório vale na edição pelo formulário
       // (que sempre manda os campos personalizados); a baixa e as mudanças de
       // situação não mandam e seguem como sempre.
-      {
+      if (completa) {
         const exec = pool as unknown as ExecutorSQL;
         const dados = item as Record<string, unknown>;
         const recusaMoeda = await recusaDaMoeda(exec, tenantId, tabela, id, dados);
@@ -174,11 +198,16 @@ export function rotasDoTitulo(tabela: TabelaDoTitulo) {
       const statusAntes = String(atual[0]?.status || antes?.status || '');
       const statusDepois = String((item as Record<string, unknown>).status ?? statusAntes);
       const pagaAgora = tabela === 'contas_pagar' && (statusDepois === 'PAGO' || statusDepois === 'PARCIAL') && statusDepois !== statusAntes;
-      const segundoFator = pagaAgora ? await conferirSegundoFatorDoPagador() : { recusa: null, aviso: null };
+      // Código de quem paga: só na versão completa (segundo-fator-pagador-servidor.ts).
+      const segundoFator = pagaAgora && completa ? await conferirSegundoFatorDoPagadorDaConta() : { recusa: null, aviso: null };
       if (segundoFator.recusa) return segundoFator.recusa;
       const gravado = await editarConta({
         tabela, colunasIndice: COLUNAS[tabela], campo, sinal, id, tenantId, item: item as Record<string, unknown>,
+        versao: completa ? 'completa' : 'simples',
       });
+      // Fornecedor informado numa conta pendente de item da Cotação: volta ao
+      // CRM (nunca derruba a edição; ver fornecedor-do-item.ts).
+      if (tabela === 'contas_pagar' && antes) void avisarFornecedorDoItem(tenantId, antes, gravado);
       return NextResponse.json(segundoFator.aviso ? { ...gravado, aviso_segundo_fator: segundoFator.aviso } : gravado);
     } catch (e) {
       if (e instanceof ErroEdicaoConta) return NextResponse.json({ error: e.message, ...e.extra }, { status: e.status });
@@ -201,6 +230,8 @@ export function rotasDoTitulo(tabela: TabelaDoTitulo) {
       if (await foraDasEmpresas(tabela, id)) return NAO_ACHADO();
       const sessao = await getSession();
       const r = await emTransacao(exec => excluirTitulo(exec, tenantId, tabela, id, { id: sessao?.userId, nome: sessao?.nome }));
+      // Versão simples: `{ ok: true }`, como sempre (o aviso é da tela completa).
+      if (!(await temModulo(tenantId, 'nucleo'))) return NextResponse.json({ ok: true });
       return NextResponse.json(r?.aviso ? { ok: true, aviso: r.aviso } : { ok: true });
     } catch (e) {
       return erroGenerico(e);

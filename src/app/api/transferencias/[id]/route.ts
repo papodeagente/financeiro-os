@@ -1,6 +1,8 @@
 import {
-  conferirSegundoFatorDoPagador, recusaAcao, recusaFinanceira, recusaExclusao, respostaPeriodoFechado,
+  recusaAcao, recusaFinanceira, recusaExclusao, respostaPeriodoFechado,
 } from '@/lib/guarda-rota';
+// Código de quem transfere: só na agência com o núcleo completo (14/11/2026).
+import { conferirSegundoFatorDoPagadorDaConta as conferirSegundoFatorDoPagador } from '@/lib/segundo-fator-pagador-servidor';
 import { getSession } from '@/lib/auth';
 import { recusaDaContaNaGravacao } from '@/lib/conta-da-gravacao';
 import type { ExecutorPermissoes } from '@/lib/permissoes-servidor';
