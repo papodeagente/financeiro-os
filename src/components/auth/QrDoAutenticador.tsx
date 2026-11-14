@@ -29,7 +29,7 @@ export function QrDoAutenticador({ uri, tamanho = 192 }: { uri: string; tamanho?
     >
       {imagem
         ? <img src={imagem} alt="Código QR para o aplicativo autenticador" width={tamanho} height={tamanho} />
-        : <span className="text-xs text-neutral-500">Gerando o QR…</span>}
+        : <span className="text-xs" style={{ color: '#525252' }}>Gerando o QR…</span>}
     </div>
   );
 }
