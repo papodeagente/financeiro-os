@@ -114,7 +114,7 @@ const porta = servidor.address().port;
 
 // ── As contas ────────────────────────────────────────────────────────────
 const ENTUR = 't-entur', AGENCIA = 't-agencia', NOVA = 't-nova', OUTRA = 't-outra';
-await query(`INSERT INTO tenants (id, numero, data) VALUES ($1, 1, '{"perfil":"ecossistema","fonte_da_comissao":"crm"}'), ($2, 2, '{}'), ($3, 3, '{}'), ($4, 4, '{"perfil":"ecossistema","fonte_da_comissao":"crm"}')`, [ENTUR, AGENCIA, NOVA, OUTRA]);
+await query(`INSERT INTO tenants (id, numero, data) VALUES ($1, 1, '{"perfil":"ecossistema","fonte_da_comissao":"crm","fin_versao":"completa"}'), ($2, 2, '{"fin_versao":"completa"}'), ($3, 3, '{"fin_versao":"completa"}'), ($4, 4, '{"perfil":"ecossistema","fonte_da_comissao":"crm","fin_versao":"completa"}')`, [ENTUR, AGENCIA, NOVA, OUTRA]);
 const SEGREDO = { [ENTUR]: 'entra-entur', [AGENCIA]: 'entra-agencia', [NOVA]: 'entra-nova', [OUTRA]: 'entra-outra' };
 const urlDoCrm = `http://127.0.0.1:${porta}/api/integracao-financeiro/webhook/150002`;
 for (const t of [ENTUR, AGENCIA, NOVA, OUTRA]) {

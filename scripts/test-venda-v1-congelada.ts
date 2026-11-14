@@ -7,6 +7,14 @@
  *   1. `gerarContasVenda` continua devolvendo exatamente aquilo;
  *   2. o sucessor `contasDaVenda`, com a mesma entrada v1, devolve o mesmo.
  *
+ * Retrato refeito em 14/11/2026 com o CÓDIGO da versão simples de
+ * `origin/main` (commit a9fd7cf, que traz a regra de 13/11 e a forma e
+ * parcelas do pagamento ao fornecedor, b7360fd): a única diferença para o de
+ * 05/11 é a `chave_natural` de cada conta a pagar. Para refazer do mesmo
+ * jeito: `git archive a9fd7cf src scripts | tar -x -C /tmp/a9`, copiar este
+ * arquivo e scripts/fixture-venda-v1.ts para /tmp/a9/scripts, apagar o
+ * congelado de lá e rodar o teste ali (ele grava o retrato da versão simples).
+ *
  * Ids sorteados e a data de hoje são trocados por marcadores estáveis.
  * Regravar o congelado (só quando a mudança for de propósito):
  *   GRAVAR_CONGELADO=1 node --experimental-strip-types --no-warnings scripts/run-tests.mjs scripts/test-venda-v1-congelada.ts

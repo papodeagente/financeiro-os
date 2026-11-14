@@ -25,6 +25,20 @@ export function ehVendaV2(payload: Record<string, unknown>): boolean {
   return Number(payload.versao_venda) >= 2 && !!payload.venda && typeof payload.venda === 'object' && !Array.isArray(payload.venda);
 }
 
+/**
+ * Versão por agência (14/11/2026): a v2 só entra na agência com o módulo
+ * "Venda completa" (modulos.ts). Sem ele, a VENDA_FECHADA v2 é lida pelos
+ * campos da v1 que ela também traz, como a versão simples sempre fez.
+ */
+export function vendaV2Aceita(payload: Record<string, unknown>, moduloVenda: boolean): boolean {
+  return moduloVenda && ehVendaV2(payload);
+}
+
+/** O que o webhook responde em `versoes_venda`: o CRM manda a v2 só quando vê o 2. */
+export function versoesDaVenda(moduloVenda: boolean): number[] {
+  return moduloVenda ? [1, 2] : [1];
+}
+
 /** Pessoa do payload v2 (fornecedor, representante, intermediário) no formato do cadastro do CRM. */
 export interface PessoaDoCrm {
   /** O objeto como veio (fornecedor_id, crm_supplier_id, fornecedor_nome, fornecedor_cnpj...), para `lerFornecedorDaVenda`. */
@@ -49,6 +63,15 @@ export interface VendaV2Lida {
   pagantes: PaganteDoCrm[];
   /** Comissão do vendedor informada pelo CRM (só referência; o cálculo é do Financeiro). */
   comissao_vendedor: { percentual: number | null; valor_centavos: number | null } | null;
+  /**
+   * Por produto (mesma ordem de `venda.produtos`): o CRM disse que o
+   * fornecedor cobra o cliente direto (`quem_cobra: 'FORNECEDOR'` ou
+   * `cobrado_pelo_fornecedor: true`). Regra de 13/11/2026: sem isso, quem
+   * decide é o cadastro do fornecedor (venda-crm-itens.ts, quemCobraNaVendaDoCrm).
+   */
+  cobrado_pelo_fornecedor: boolean[];
+  /** Por produto: os itens da Cotação do CRM (`crm_item_ids`), para devolver o fornecedor informado aqui. */
+  crm_item_ids: number[][];
 }
 
 const txt = (v: unknown, max = 300) => (v === null || v === undefined ? '' : String(v).trim().slice(0, max));
@@ -76,7 +99,10 @@ export function lerVendaV2(payload: Record<string, unknown>, base: { id: string;
   const bloco = obj(payload.venda) ?? {};
   const pessoas: PessoaDoCrm[] = [];
   const pagantes: PaganteDoCrm[] = [];
-  const produtos = lista(bloco.produtos).map((p, i) => {
+  const brutos = lista(bloco.produtos);
+  const cobrado_pelo_fornecedor = brutos.map(p => txt(p.quem_cobra).toUpperCase() === 'FORNECEDOR' || p.cobrado_pelo_fornecedor === true);
+  const crm_item_ids = brutos.map(p => (Array.isArray(p.crm_item_ids) ? (p.crm_item_ids as unknown[]).map(Number).filter(x => Number.isInteger(x) && x > 0) : []));
+  const produtos = brutos.map((p, i) => {
     const ref = txt(p.ref, 120) || `${i + 1}`;
     const fornecedor = obj(p.fornecedor);
     const representante = obj(p.representante);
@@ -137,5 +163,5 @@ export function lerVendaV2(payload: Record<string, unknown>, base: { id: string;
   const cv = obj(bloco.comissao_vendedor);
   const pct = cv && Number.isFinite(Number(cv.percentual)) && cv.percentual !== null ? Number(cv.percentual) : null;
   const val = cv && Number.isFinite(Number(cv.valor)) && cv.valor !== null ? reaisParaCentavos(cv.valor) : null;
-  return { venda, erros, pessoas, pagantes, comissao_vendedor: cv ? { percentual: pct, valor_centavos: val } : null };
+  return { venda, erros, pessoas, pagantes, comissao_vendedor: cv ? { percentual: pct, valor_centavos: val } : null, cobrado_pelo_fornecedor, crm_item_ids };
 }

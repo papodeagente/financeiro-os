@@ -10,6 +10,15 @@
  *   - conta baixada é preservada na regeração e não ganha gêmea;
  *   - o índice do banco recusa a mesma parcela duas vezes.
  *
+ * Retrato refeito em 14/11/2026 com o CÓDIGO da versão simples de
+ * `origin/main` (commit a9fd7cf): a regra de 13/11 (a agência recebe do
+ * cliente e paga cada fornecedor; pago direto só com "recebe direto do
+ * cliente" no cadastro) vale nas duas versões, por decisão do Fernando. Por
+ * isso o caso `pago_direto` (fornecedor sem a marcação) passou a abrir a
+ * receber do cliente e a pagar ao fornecedor. Para refazer do mesmo jeito,
+ * rode este arquivo dentro de `git archive a9fd7cf src scripts` sem o
+ * congelado (ele grava o retrato da versão simples).
+ *
  * Regravar (só quando a mudança for de propósito):
  *   GRAVAR_CONGELADO=1 node --no-warnings scripts/test-sql-venda-v1-congelada.mjs
  */
@@ -96,6 +105,8 @@ async function contasDa(vid) {
     if (o.data_emissao === hoje) o.data_emissao = '<hoje>';
     if (o.cliente_da_venda_id) o.cliente_da_venda_id = '<cliente>';
     if (o.origem_fornecedor_id) o.origem_fornecedor_id = '<fornecedor>';
+    // Chave natural (b7360fd): "<fornecedor>|<itens>|parcela:n", com o id sorteado do fornecedor.
+    if (typeof o.chave_natural === 'string') o.chave_natural = o.chave_natural.replace(/^[^|]+(?=\|)/, f => (f === '-' ? f : '<fornecedor>'));
     return o;
   };
   const ordem = (a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b));
