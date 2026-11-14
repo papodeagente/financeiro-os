@@ -47,6 +47,9 @@ for (const t of manifesto.telas) {
   if (!existsSync(caminho)) { eq(false, true, `${t.arquivo} existe`); continue; }
   let fonte = readFileSync(caminho, 'utf8');
   for (const [novo, antigo] of t.ajustes_de_tipo ?? []) fonte = fonte.split(novo).join(antigo);
+  // Correção de segurança que a tela simples precisou receber (ex.: a senha vai em texto e o
+  // hash é feito no servidor, FIN-15): desfeita aqui para conferir o resto contra a9fd7cf.
+  for (const [novo, antigo] of t.ajustes_de_seguranca ?? []) fonte = fonte.split(novo).join(antigo);
   for (const [novo, antigo] of t.imports_trocados) fonte = trocarImport(fonte, novo, antigo);
   eq(sha(fonte), t.sha256, `${t.arquivo} = ${t.original} de ${manifesto.origem} (salvo imports e ajustes de tipo)`);
   if (git) {

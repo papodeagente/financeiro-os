@@ -120,31 +120,21 @@ export default function UsuariosPage() {
       toSave.permissoes = permissoesParaPerfil(toSave.perfil);
 
       if (toSave.senha_hash && !toSave.senha_hash.includes(':')) {
-        if (toSave.senha_hash.length < 6) {
-          toast.error('A senha deve ter no mínimo 6 caracteres');
+        if (toSave.senha_hash.length < 8) {
+          toast.error('A senha deve ter no mínimo 8 caracteres');
           setSaving(false);
           return;
         }
-        const hashRes = await fetch('/api/auth/hash-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: toSave.senha_hash }),
-        });
-        if (hashRes.ok) {
-          const { hash } = await hashRes.json();
-          toSave.senha_hash = hash;
-        } else {
-          toast.error('Erro ao processar senha');
-          setSaving(false);
-          return;
-        }
+        // A senha vai em texto e o hash é feito no servidor (segurança, FIN-15).
+        (toSave as Record<string, unknown>).senha = toSave.senha_hash;
+        toSave.senha_hash = '';
       } else if (!toSave.senha_hash && !isNew) {
         const existing = usuarios.find(u => u.id === toSave.id);
         if (existing) toSave.senha_hash = existing.senha_hash;
       }
 
       if (isNew) {
-        if (!toSave.senha_hash) {
+        if (!toSave.senha_hash && !(toSave as Record<string, unknown>).senha) {
           toast.error('Defina uma senha para o novo usuário');
           setSaving(false);
           return;

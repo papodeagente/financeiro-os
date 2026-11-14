@@ -1,399 +1,409 @@
 {
- "origem": "a9fd7cf",
- "telas": [
-  {
-   "arquivo": "src/app/config/auditoria/TelaSimples.tsx",
-   "original": "src/app/config/auditoria/page.tsx",
-   "sha256": "d44f0345b495fc564d6b35be6a43dae79cfa9bedf3dd3728c4950bb7b1afea22",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/config/crm/TelaSimples.tsx",
-   "original": "src/app/config/crm/page.tsx",
-   "sha256": "736f58f87df2aae6558f9d57b2e01037ae3b1130316f885ef87f3645828e025b",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/config/fiscal/TelaSimples.tsx",
-   "original": "src/app/config/fiscal/page.tsx",
-   "sha256": "15e5298976d68351aa8a7203dd482ceb795cacdf60d219c95862f69e2ff27d2f",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/config/fiscal/avancado/TelaSimples.tsx",
-   "original": "src/app/config/fiscal/avancado/page.tsx",
-   "sha256": "b3970655e7cd07fecf14f64840e9093a93e844f49e835accf6cf1006e54e5bb0",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/config/fiscal/servicos/TelaSimples.tsx",
-   "original": "src/app/config/fiscal/servicos/page.tsx",
-   "sha256": "1016a16a7fb14e51b9d686ddedc91f0b85603944b0a66715a2ef040c623ddb66",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/config/integracoes/sites/TelaSimples.tsx",
-   "original": "src/app/config/integracoes/sites/page.tsx",
-   "sha256": "9e8ccb5c097a146736f85941c67add03d05a091a020f272a58ebba1da286ed6d",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/config/plataformas/TelaSimples.tsx",
-   "original": "src/app/config/plataformas/page.tsx",
-   "sha256": "97019e0ad3685a0f5d4718158865222bd1515f93be57cd0dd2965d649e461bce",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/config/reset/TelaSimples.tsx",
-   "original": "src/app/config/reset/page.tsx",
-   "sha256": "54eccf23adb1fb521949dfb8cabff05ca7013d191f10af3350aa99cc97eb7f16",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/config/usuarios/TelaSimples.tsx",
-   "original": "src/app/config/usuarios/page.tsx",
-   "sha256": "7df1e5b784ebfd9d1b63c545686803e387b5d864893ba6ea43f1ae461e6abbff",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/equipe/comissoes/TelaSimples.tsx",
-   "original": "src/app/equipe/comissoes/page.tsx",
-   "sha256": "f11d49da32461e8b8092352127c6d7c810f168fb0e4548def6ca94da1a7cb15d",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/equipe/planos-comissao/TelaSimples.tsx",
-   "original": "src/app/equipe/planos-comissao/page.tsx",
-   "sha256": "0f638b7b4a9d4a6c2ca9e05a53fdc5233fb59db211b667f2e27340ca0b018021",
-   "imports_trocados": [],
-   "ajustes_de_tipo": [
-    [
-     "const BASES: Partial<Record<TipoBaseComissao, string>> = {",
-     "const BASES: Record<TipoBaseComissao, string> = {"
-    ]
-   ]
-  },
-  {
-   "arquivo": "src/app/equipe/vendedores/TelaSimples.tsx",
-   "original": "src/app/equipe/vendedores/page.tsx",
-   "sha256": "70c4a557f29379d864770a64562451dbac67c499167b429afd5cb62b926d9095",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/TelaSimples.tsx",
-   "original": "src/app/financeiro-ag/page.tsx",
-   "sha256": "167a793093df9326337cf6abc6ae62715da8d81204297ca931e65109b4a4083d",
-   "imports_trocados": [
-    [
-     "./receber/BaixaDeReceberSimples",
-     "./receber/BaixaDeReceber"
-    ],
-    [
-     "./pagar/BaixaDePagarSimples",
-     "./pagar/BaixaDePagar"
-    ]
-   ],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/cartoes/TelaSimples.tsx",
-   "original": "src/app/financeiro-ag/cartoes/page.tsx",
-   "sha256": "a8f3a85471254c0aae01cc1572729320feec75767ae2ea505fc7016044532224",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/conciliacao/TelaSimples.tsx",
-   "original": "src/app/financeiro-ag/conciliacao/page.tsx",
-   "sha256": "9e215a295ccc1924744428a346de7eb5c02e87b3fde4884353dddd2a51d58de7",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/contas-bancarias/TelaSimples.tsx",
-   "original": "src/app/financeiro-ag/contas-bancarias/page.tsx",
-   "sha256": "c20533309e5b193748d1ef5970e301dc716c6b66edd9cb720708a6156deb6d14",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/dre/DemonstrativoTabelaSimples.tsx",
-   "original": "src/app/financeiro-ag/dre/DemonstrativoTabela.tsx",
-   "sha256": "ebbb683d86abd2a28551bcc46e40ee102298d0c23438b0da312bfa99f7f81f03",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/dre/TelaSimples.tsx",
-   "original": "src/app/financeiro-ag/dre/page.tsx",
-   "sha256": "0d9d60edc734367fe199130e293d9905f26067f5ddf691d150477f559cfb8925",
-   "imports_trocados": [
-    [
-     "./DemonstrativoTabelaSimples",
-     "./DemonstrativoTabela"
-    ]
-   ],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/fluxo-caixa/CadernoSimples.tsx",
-   "original": "src/app/financeiro-ag/fluxo-caixa/Caderno.tsx",
-   "sha256": "d8699f5f5fda1a78ae5bd27ca7be1aa96029f55c193ae32a2b79375bc24d8b8d",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/fluxo-caixa/CurvaDoSaldoSimples.tsx",
-   "original": "src/app/financeiro-ag/fluxo-caixa/CurvaDoSaldo.tsx",
-   "sha256": "b26150b62d4bfea7aa34fe166711134d4707b923b66e8def2273d0bedd6d24f5",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/fluxo-caixa/DetalheDaLinhaSimples.tsx",
-   "original": "src/app/financeiro-ag/fluxo-caixa/DetalheDaLinha.tsx",
-   "sha256": "cb5bfa859059454d4a3d18f48fb062914ff2093fee614d812a44956b65c672ee",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/fluxo-caixa/TelaSimples.tsx",
-   "original": "src/app/financeiro-ag/fluxo-caixa/page.tsx",
-   "sha256": "c651b1e1708effa3c1b817d8cf23d4d37b471b038abdbaad05cc7a24d7bb2a27",
-   "imports_trocados": [
-    [
-     "./CurvaDoSaldoSimples",
-     "./CurvaDoSaldo"
-    ],
-    [
-     "./CadernoSimples",
-     "./Caderno"
-    ],
-    [
-     "./DetalheDaLinhaSimples",
-     "./DetalheDaLinha"
-    ]
-   ],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/notas/TelaSimples.tsx",
-   "original": "src/app/financeiro-ag/notas/page.tsx",
-   "sha256": "5d927d8aecee91e8565b1c64f0725ec1f48329507f65d1a5eb2330484c2068e4",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/pagar/BaixaDePagarSimples.tsx",
-   "original": "src/app/financeiro-ag/pagar/BaixaDePagar.tsx",
-   "sha256": "16805f6123bca985ff6ade482893f86167e6cd3e89229bab157e0e5637c5b07c",
-   "imports_trocados": [
-    [
-     "./DialogBaixaSimples",
-     "./DialogBaixa"
-    ]
-   ],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/pagar/DialogBaixaSimples.tsx",
-   "original": "src/app/financeiro-ag/pagar/DialogBaixa.tsx",
-   "sha256": "4ca0b2680095f112c7619083180d8508fc8dbd2b31421f09e0e8324b11788fee",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/pagar/FormularioContaSimples.tsx",
-   "original": "src/app/financeiro-ag/pagar/FormularioConta.tsx",
-   "sha256": "662bee5fada359c6d379e86d85cb0505e77860fcebe182549f1cc8c41c90e7fc",
-   "imports_trocados": [
-    [
-     "./tiposSimples",
-     "./tipos"
-    ]
-   ],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/pagar/PainelCopiarMesSimples.tsx",
-   "original": "src/app/financeiro-ag/pagar/PainelCopiarMes.tsx",
-   "sha256": "fa273a381906ee35c4007f719e7b7925772cf29719bf3379e30a2d03aaeded03",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/pagar/TelaSimples.tsx",
-   "original": "src/app/financeiro-ag/pagar/page.tsx",
-   "sha256": "77b9b8d23b16b56896aa3f02ea50e8949827aec261063ebc278b83fc708a15dd",
-   "imports_trocados": [
-    [
-     "./colunasSimples",
-     "./colunas"
-    ],
-    [
-     "./BaixaDePagarSimples",
-     "./BaixaDePagar"
-    ],
-    [
-     "./FormularioContaSimples",
-     "./FormularioConta"
-    ],
-    [
-     "./PainelCopiarMesSimples",
-     "./PainelCopiarMes"
-    ],
-    [
-     "./tiposSimples",
-     "./tipos"
-    ]
-   ],
-   "ajustes_de_tipo": [
-    [
-     "const PICKER_PARA_FILTRO: Record<PeriodoChave, FiltroPeriodo> = Object.assign({} as Record<PeriodoChave, FiltroPeriodo>, {",
-     "const PICKER_PARA_FILTRO: Record<PeriodoChave, FiltroPeriodo> = {"
-    ],
-    [
-     "  PERSONALIZADO: 'CUSTOM',\n});",
-     "  PERSONALIZADO: 'CUSTOM',\n};"
-    ]
-   ]
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/pagar/colunasSimples.tsx",
-   "original": "src/app/financeiro-ag/pagar/colunas.tsx",
-   "sha256": "0f5f06f5617a3d25bbaa07b48a1ff56910cbaba889012642ee2271a2a334af11",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/pagar/tiposSimples.ts",
-   "original": "src/app/financeiro-ag/pagar/tipos.ts",
-   "sha256": "8d69492497aa7f8a20eb742dd9dfb43d76c5f0b34d0a3fdef23cdd229139887d",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/plano-contas/TelaSimples.tsx",
-   "original": "src/app/financeiro-ag/plano-contas/page.tsx",
-   "sha256": "a3018f5eae7bcc55a9443274accf45e89bb98dc5b3b807ff8ae3d96a95f24684",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/receber/BaixaDeReceberSimples.tsx",
-   "original": "src/app/financeiro-ag/receber/BaixaDeReceber.tsx",
-   "sha256": "7f1618a063f7998a6334ba8545d90adc3d5d65221486d84e22f9da8c8fb3b547",
-   "imports_trocados": [
-    [
-     "./DialogBaixaSimples",
-     "./DialogBaixa"
-    ]
-   ],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/receber/DialogBaixaSimples.tsx",
-   "original": "src/app/financeiro-ag/receber/DialogBaixa.tsx",
-   "sha256": "9b290455e284c347433731e02088c7da60562a0877c0910249065ae7cc780380",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/receber/FormularioContaSimples.tsx",
-   "original": "src/app/financeiro-ag/receber/FormularioConta.tsx",
-   "sha256": "b7245dcf133f940d10d2e36ff698e077cd4561b98ffe3876634f61c93fe74bb9",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/receber/NovaVendaSimples.tsx",
-   "original": "src/app/financeiro-ag/receber/NovaVenda.tsx",
-   "sha256": "a4b1c48f884253cbac2d73a0c830414c21eeb7bfc063220abc812dcf9f3df8b7",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/receber/TelaSimples.tsx",
-   "original": "src/app/financeiro-ag/receber/page.tsx",
-   "sha256": "8b11d991f23e59c686b22237b60764b35002c08ba8e3ba97d2fa269eee5cccff",
-   "imports_trocados": [
-    [
-     "./BaixaDeReceberSimples",
-     "./BaixaDeReceber"
-    ],
-    [
-     "./NovaVendaSimples",
-     "./NovaVenda"
-    ],
-    [
-     "./FormularioContaSimples",
-     "./FormularioConta"
-    ]
-   ],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/financeiro-ag/transferencias/TelaSimples.tsx",
-   "original": "src/app/financeiro-ag/transferencias/page.tsx",
-   "sha256": "a85f479a85a8aa54e58f317b4c6d86d7f57df31cf7812080b61a361c108de8ea",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/pessoas/clientes/[id]/TelaSimples.tsx",
-   "original": "src/app/pessoas/clientes/[id]/page.tsx",
-   "sha256": "749e0ddaa2301408449d6975a1c30f7e889286cbb3c7a9005878e40f375e2151",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/pessoas/fornecedores/TelaSimples.tsx",
-   "original": "src/app/pessoas/fornecedores/page.tsx",
-   "sha256": "288ba472c225689911c5d7a419e3ece7ea7b29348326ab2bdc0a09ffe4c5aca2",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/planejamento/custos/AcompanhamentoSimples.tsx",
-   "original": "src/app/planejamento/custos/Acompanhamento.tsx",
-   "sha256": "4dd310acbc434ee5839d62abc1d94468f72f8fccca799d5dc4338bda0fa3a0ea",
-   "imports_trocados": [
-    [
-     "@/lib/plano-do-mes-simples",
-     "@/lib/plano-do-mes"
-    ]
-   ],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/app/planejamento/custos/TelaSimples.tsx",
-   "original": "src/app/planejamento/custos/page.tsx",
-   "sha256": "5c3db7c6625100d31d8ccbf85854bd97948b3593fb49de6557fe152185c026a9",
-   "imports_trocados": [
-    [
-     "./AcompanhamentoSimples",
-     "./Acompanhamento"
-    ]
-   ],
-   "ajustes_de_tipo": []
-  },
-  {
-   "arquivo": "src/lib/plano-do-mes-simples.ts",
-   "original": "src/lib/plano-do-mes.ts",
-   "sha256": "e38273b86651ea35b9f9bcd114e380b78b8c2a1c20196ae69f76ec2fe3a4cefb",
-   "imports_trocados": [],
-   "ajustes_de_tipo": []
-  }
- ]
+  "origem": "a9fd7cf",
+  "telas": [
+    {
+      "arquivo": "src/app/config/auditoria/TelaSimples.tsx",
+      "original": "src/app/config/auditoria/page.tsx",
+      "sha256": "d44f0345b495fc564d6b35be6a43dae79cfa9bedf3dd3728c4950bb7b1afea22",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/config/crm/TelaSimples.tsx",
+      "original": "src/app/config/crm/page.tsx",
+      "sha256": "736f58f87df2aae6558f9d57b2e01037ae3b1130316f885ef87f3645828e025b",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/config/fiscal/TelaSimples.tsx",
+      "original": "src/app/config/fiscal/page.tsx",
+      "sha256": "15e5298976d68351aa8a7203dd482ceb795cacdf60d219c95862f69e2ff27d2f",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/config/fiscal/avancado/TelaSimples.tsx",
+      "original": "src/app/config/fiscal/avancado/page.tsx",
+      "sha256": "b3970655e7cd07fecf14f64840e9093a93e844f49e835accf6cf1006e54e5bb0",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/config/fiscal/servicos/TelaSimples.tsx",
+      "original": "src/app/config/fiscal/servicos/page.tsx",
+      "sha256": "1016a16a7fb14e51b9d686ddedc91f0b85603944b0a66715a2ef040c623ddb66",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/config/integracoes/sites/TelaSimples.tsx",
+      "original": "src/app/config/integracoes/sites/page.tsx",
+      "sha256": "9e8ccb5c097a146736f85941c67add03d05a091a020f272a58ebba1da286ed6d",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/config/plataformas/TelaSimples.tsx",
+      "original": "src/app/config/plataformas/page.tsx",
+      "sha256": "97019e0ad3685a0f5d4718158865222bd1515f93be57cd0dd2965d649e461bce",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/config/reset/TelaSimples.tsx",
+      "original": "src/app/config/reset/page.tsx",
+      "sha256": "54eccf23adb1fb521949dfb8cabff05ca7013d191f10af3350aa99cc97eb7f16",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/config/usuarios/TelaSimples.tsx",
+      "original": "src/app/config/usuarios/page.tsx",
+      "sha256": "7df1e5b784ebfd9d1b63c545686803e387b5d864893ba6ea43f1ae461e6abbff",
+      "imports_trocados": [],
+      "ajustes_de_tipo": [],
+      "ajustes_de_seguranca": [
+        [
+          "      if (toSave.senha_hash && !toSave.senha_hash.includes(':')) {\n        if (toSave.senha_hash.length < 8) {\n          toast.error('A senha deve ter no mínimo 8 caracteres');\n          setSaving(false);\n          return;\n        }\n        // A senha vai em texto e o hash é feito no servidor (segurança, FIN-15).\n        (toSave as Record<string, unknown>).senha = toSave.senha_hash;\n        toSave.senha_hash = '';\n      } else if (!toSave.senha_hash && !isNew) {",
+          "      if (toSave.senha_hash && !toSave.senha_hash.includes(':')) {\n        if (toSave.senha_hash.length < 6) {\n          toast.error('A senha deve ter no mínimo 6 caracteres');\n          setSaving(false);\n          return;\n        }\n        const hashRes = await fetch('/api/auth/hash-password', {\n          method: 'POST',\n          headers: { 'Content-Type': 'application/json' },\n          body: JSON.stringify({ password: toSave.senha_hash }),\n        });\n        if (hashRes.ok) {\n          const { hash } = await hashRes.json();\n          toSave.senha_hash = hash;\n        } else {\n          toast.error('Erro ao processar senha');\n          setSaving(false);\n          return;\n        }\n      } else if (!toSave.senha_hash && !isNew) {"
+        ],
+        [
+          "        if (!toSave.senha_hash && !(toSave as Record<string, unknown>).senha) {\n          toast.error('Defina uma senha para o novo usuário');",
+          "        if (!toSave.senha_hash) {\n          toast.error('Defina uma senha para o novo usuário');"
+        ]
+      ]
+    },
+    {
+      "arquivo": "src/app/equipe/comissoes/TelaSimples.tsx",
+      "original": "src/app/equipe/comissoes/page.tsx",
+      "sha256": "f11d49da32461e8b8092352127c6d7c810f168fb0e4548def6ca94da1a7cb15d",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/equipe/planos-comissao/TelaSimples.tsx",
+      "original": "src/app/equipe/planos-comissao/page.tsx",
+      "sha256": "0f638b7b4a9d4a6c2ca9e05a53fdc5233fb59db211b667f2e27340ca0b018021",
+      "imports_trocados": [],
+      "ajustes_de_tipo": [
+        [
+          "const BASES: Partial<Record<TipoBaseComissao, string>> = {",
+          "const BASES: Record<TipoBaseComissao, string> = {"
+        ]
+      ]
+    },
+    {
+      "arquivo": "src/app/equipe/vendedores/TelaSimples.tsx",
+      "original": "src/app/equipe/vendedores/page.tsx",
+      "sha256": "70c4a557f29379d864770a64562451dbac67c499167b429afd5cb62b926d9095",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/TelaSimples.tsx",
+      "original": "src/app/financeiro-ag/page.tsx",
+      "sha256": "167a793093df9326337cf6abc6ae62715da8d81204297ca931e65109b4a4083d",
+      "imports_trocados": [
+        [
+          "./receber/BaixaDeReceberSimples",
+          "./receber/BaixaDeReceber"
+        ],
+        [
+          "./pagar/BaixaDePagarSimples",
+          "./pagar/BaixaDePagar"
+        ]
+      ],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/cartoes/TelaSimples.tsx",
+      "original": "src/app/financeiro-ag/cartoes/page.tsx",
+      "sha256": "a8f3a85471254c0aae01cc1572729320feec75767ae2ea505fc7016044532224",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/conciliacao/TelaSimples.tsx",
+      "original": "src/app/financeiro-ag/conciliacao/page.tsx",
+      "sha256": "9e215a295ccc1924744428a346de7eb5c02e87b3fde4884353dddd2a51d58de7",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/contas-bancarias/TelaSimples.tsx",
+      "original": "src/app/financeiro-ag/contas-bancarias/page.tsx",
+      "sha256": "c20533309e5b193748d1ef5970e301dc716c6b66edd9cb720708a6156deb6d14",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/dre/DemonstrativoTabelaSimples.tsx",
+      "original": "src/app/financeiro-ag/dre/DemonstrativoTabela.tsx",
+      "sha256": "ebbb683d86abd2a28551bcc46e40ee102298d0c23438b0da312bfa99f7f81f03",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/dre/TelaSimples.tsx",
+      "original": "src/app/financeiro-ag/dre/page.tsx",
+      "sha256": "0d9d60edc734367fe199130e293d9905f26067f5ddf691d150477f559cfb8925",
+      "imports_trocados": [
+        [
+          "./DemonstrativoTabelaSimples",
+          "./DemonstrativoTabela"
+        ]
+      ],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/fluxo-caixa/CadernoSimples.tsx",
+      "original": "src/app/financeiro-ag/fluxo-caixa/Caderno.tsx",
+      "sha256": "d8699f5f5fda1a78ae5bd27ca7be1aa96029f55c193ae32a2b79375bc24d8b8d",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/fluxo-caixa/CurvaDoSaldoSimples.tsx",
+      "original": "src/app/financeiro-ag/fluxo-caixa/CurvaDoSaldo.tsx",
+      "sha256": "b26150b62d4bfea7aa34fe166711134d4707b923b66e8def2273d0bedd6d24f5",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/fluxo-caixa/DetalheDaLinhaSimples.tsx",
+      "original": "src/app/financeiro-ag/fluxo-caixa/DetalheDaLinha.tsx",
+      "sha256": "cb5bfa859059454d4a3d18f48fb062914ff2093fee614d812a44956b65c672ee",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/fluxo-caixa/TelaSimples.tsx",
+      "original": "src/app/financeiro-ag/fluxo-caixa/page.tsx",
+      "sha256": "c651b1e1708effa3c1b817d8cf23d4d37b471b038abdbaad05cc7a24d7bb2a27",
+      "imports_trocados": [
+        [
+          "./CurvaDoSaldoSimples",
+          "./CurvaDoSaldo"
+        ],
+        [
+          "./CadernoSimples",
+          "./Caderno"
+        ],
+        [
+          "./DetalheDaLinhaSimples",
+          "./DetalheDaLinha"
+        ]
+      ],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/notas/TelaSimples.tsx",
+      "original": "src/app/financeiro-ag/notas/page.tsx",
+      "sha256": "5d927d8aecee91e8565b1c64f0725ec1f48329507f65d1a5eb2330484c2068e4",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/pagar/BaixaDePagarSimples.tsx",
+      "original": "src/app/financeiro-ag/pagar/BaixaDePagar.tsx",
+      "sha256": "16805f6123bca985ff6ade482893f86167e6cd3e89229bab157e0e5637c5b07c",
+      "imports_trocados": [
+        [
+          "./DialogBaixaSimples",
+          "./DialogBaixa"
+        ]
+      ],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/pagar/DialogBaixaSimples.tsx",
+      "original": "src/app/financeiro-ag/pagar/DialogBaixa.tsx",
+      "sha256": "4ca0b2680095f112c7619083180d8508fc8dbd2b31421f09e0e8324b11788fee",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/pagar/FormularioContaSimples.tsx",
+      "original": "src/app/financeiro-ag/pagar/FormularioConta.tsx",
+      "sha256": "662bee5fada359c6d379e86d85cb0505e77860fcebe182549f1cc8c41c90e7fc",
+      "imports_trocados": [
+        [
+          "./tiposSimples",
+          "./tipos"
+        ]
+      ],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/pagar/PainelCopiarMesSimples.tsx",
+      "original": "src/app/financeiro-ag/pagar/PainelCopiarMes.tsx",
+      "sha256": "fa273a381906ee35c4007f719e7b7925772cf29719bf3379e30a2d03aaeded03",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/pagar/TelaSimples.tsx",
+      "original": "src/app/financeiro-ag/pagar/page.tsx",
+      "sha256": "77b9b8d23b16b56896aa3f02ea50e8949827aec261063ebc278b83fc708a15dd",
+      "imports_trocados": [
+        [
+          "./colunasSimples",
+          "./colunas"
+        ],
+        [
+          "./BaixaDePagarSimples",
+          "./BaixaDePagar"
+        ],
+        [
+          "./FormularioContaSimples",
+          "./FormularioConta"
+        ],
+        [
+          "./PainelCopiarMesSimples",
+          "./PainelCopiarMes"
+        ],
+        [
+          "./tiposSimples",
+          "./tipos"
+        ]
+      ],
+      "ajustes_de_tipo": [
+        [
+          "const PICKER_PARA_FILTRO: Record<PeriodoChave, FiltroPeriodo> = Object.assign({} as Record<PeriodoChave, FiltroPeriodo>, {",
+          "const PICKER_PARA_FILTRO: Record<PeriodoChave, FiltroPeriodo> = {"
+        ],
+        [
+          "  PERSONALIZADO: 'CUSTOM',\n});",
+          "  PERSONALIZADO: 'CUSTOM',\n};"
+        ]
+      ]
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/pagar/colunasSimples.tsx",
+      "original": "src/app/financeiro-ag/pagar/colunas.tsx",
+      "sha256": "0f5f06f5617a3d25bbaa07b48a1ff56910cbaba889012642ee2271a2a334af11",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/pagar/tiposSimples.ts",
+      "original": "src/app/financeiro-ag/pagar/tipos.ts",
+      "sha256": "8d69492497aa7f8a20eb742dd9dfb43d76c5f0b34d0a3fdef23cdd229139887d",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/plano-contas/TelaSimples.tsx",
+      "original": "src/app/financeiro-ag/plano-contas/page.tsx",
+      "sha256": "a3018f5eae7bcc55a9443274accf45e89bb98dc5b3b807ff8ae3d96a95f24684",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/receber/BaixaDeReceberSimples.tsx",
+      "original": "src/app/financeiro-ag/receber/BaixaDeReceber.tsx",
+      "sha256": "7f1618a063f7998a6334ba8545d90adc3d5d65221486d84e22f9da8c8fb3b547",
+      "imports_trocados": [
+        [
+          "./DialogBaixaSimples",
+          "./DialogBaixa"
+        ]
+      ],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/receber/DialogBaixaSimples.tsx",
+      "original": "src/app/financeiro-ag/receber/DialogBaixa.tsx",
+      "sha256": "9b290455e284c347433731e02088c7da60562a0877c0910249065ae7cc780380",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/receber/FormularioContaSimples.tsx",
+      "original": "src/app/financeiro-ag/receber/FormularioConta.tsx",
+      "sha256": "b7245dcf133f940d10d2e36ff698e077cd4561b98ffe3876634f61c93fe74bb9",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/receber/NovaVendaSimples.tsx",
+      "original": "src/app/financeiro-ag/receber/NovaVenda.tsx",
+      "sha256": "a4b1c48f884253cbac2d73a0c830414c21eeb7bfc063220abc812dcf9f3df8b7",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/receber/TelaSimples.tsx",
+      "original": "src/app/financeiro-ag/receber/page.tsx",
+      "sha256": "8b11d991f23e59c686b22237b60764b35002c08ba8e3ba97d2fa269eee5cccff",
+      "imports_trocados": [
+        [
+          "./BaixaDeReceberSimples",
+          "./BaixaDeReceber"
+        ],
+        [
+          "./NovaVendaSimples",
+          "./NovaVenda"
+        ],
+        [
+          "./FormularioContaSimples",
+          "./FormularioConta"
+        ]
+      ],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/financeiro-ag/transferencias/TelaSimples.tsx",
+      "original": "src/app/financeiro-ag/transferencias/page.tsx",
+      "sha256": "a85f479a85a8aa54e58f317b4c6d86d7f57df31cf7812080b61a361c108de8ea",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/pessoas/clientes/[id]/TelaSimples.tsx",
+      "original": "src/app/pessoas/clientes/[id]/page.tsx",
+      "sha256": "749e0ddaa2301408449d6975a1c30f7e889286cbb3c7a9005878e40f375e2151",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/pessoas/fornecedores/TelaSimples.tsx",
+      "original": "src/app/pessoas/fornecedores/page.tsx",
+      "sha256": "288ba472c225689911c5d7a419e3ece7ea7b29348326ab2bdc0a09ffe4c5aca2",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/planejamento/custos/AcompanhamentoSimples.tsx",
+      "original": "src/app/planejamento/custos/Acompanhamento.tsx",
+      "sha256": "4dd310acbc434ee5839d62abc1d94468f72f8fccca799d5dc4338bda0fa3a0ea",
+      "imports_trocados": [
+        [
+          "@/lib/plano-do-mes-simples",
+          "@/lib/plano-do-mes"
+        ]
+      ],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/app/planejamento/custos/TelaSimples.tsx",
+      "original": "src/app/planejamento/custos/page.tsx",
+      "sha256": "5c3db7c6625100d31d8ccbf85854bd97948b3593fb49de6557fe152185c026a9",
+      "imports_trocados": [
+        [
+          "./AcompanhamentoSimples",
+          "./Acompanhamento"
+        ]
+      ],
+      "ajustes_de_tipo": []
+    },
+    {
+      "arquivo": "src/lib/plano-do-mes-simples.ts",
+      "original": "src/lib/plano-do-mes.ts",
+      "sha256": "e38273b86651ea35b9f9bcd114e380b78b8c2a1c20196ae69f76ec2fe3a4cefb",
+      "imports_trocados": [],
+      "ajustes_de_tipo": []
+    }
+  ]
 }

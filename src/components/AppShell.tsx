@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import { useModulos } from '@/components/useModulos';
 import { useAuth } from '@/contexts/AuthContext';
 import { useActivePillar } from '@/hooks/useActivePillar';
 import { TopBar } from './TopBar';
@@ -18,6 +19,9 @@ import { useState, useEffect, useCallback } from 'react';
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, loading } = useAuth();
+  // O recibo da venda sem moldura é o da versão completa (módulo venda); o da
+  // versão simples abre dentro do sistema, como sempre abriu.
+  const modulos = useModulos();
   const activePillar = useActivePillar();
   const { markVisited } = usePillarProgress();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -153,7 +157,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // Nota de débito da venda para imprimir (E5, parte B).
     (pathname.startsWith('/vendas/') && pathname.endsWith('/nota-de-debito')) ||
     // Recibo da venda e recibo consolidado da fatura para imprimir (E7).
-    (pathname.startsWith('/vendas/') && pathname.endsWith('/recibo')) ||
+    (pathname.startsWith('/vendas/') && pathname.endsWith('/recibo') && modulos.tem('venda')) ||
     (pathname.startsWith('/financeiro-ag/faturas/') && pathname.endsWith('/recibo')) ||
     pathname.startsWith('/mapas-mentais/publico/') ||
     pathname.startsWith('/admin') ||
