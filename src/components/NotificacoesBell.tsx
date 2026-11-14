@@ -34,9 +34,11 @@ import {
   AlarmClock, Landmark, ReceiptText, FileExclamationPoint,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useModulos } from '@/components/useModulos';
 import {
   PREFERENCIAS_NOTIFICACOES_PADRAO,
   TIPOS_NOTIFICACAO,
+  tiposDaVersao,
   type PreferenciasNotificacoes,
 } from '@/lib/notificacoes-config';
 
@@ -402,9 +404,12 @@ export function NotificacoesBell() {
   itemsRef.current = items;
   loadedPageRef.current = loadedPage;
 
+  // Versão simples: as preferências mostram só os tipos de sempre (notificacoes-config.ts).
+  const { telasCompletas } = useModulos();
+  const tiposDaConta = useMemo(() => tiposDaVersao(telasCompletas), [telasCompletas]);
   const availableTypes = useMemo(
-    () => Array.from(new Set([...CONFIGURED_TYPES, ...items.map(item => item.tipo)])),
-    [items],
+    () => Array.from(new Set([...tiposDaConta, ...items.map(item => item.tipo)])),
+    [items, tiposDaConta],
   );
   const preferencesDirty = useMemo(
     () => preferenceSignature(preferenceDraft) !== preferenceSignature(preferences),
@@ -1324,7 +1329,7 @@ export function NotificacoesBell() {
                 <legend className="text-xs font-semibold text-[var(--t-text)]">Tipos de notificação</legend>
                 <p className="mt-0.5 text-[11px] text-[var(--t-text-muted)]">Escolha quais eventos devem aparecer para você.</p>
                 <div className="mt-3 space-y-1">
-                  {CONFIGURED_TYPES.map(tipo => {
+                  {tiposDaConta.map(tipo => {
                     const Icon = ICON_FOR_TIPO[tipo] ?? Bell;
                     const enabled = preferenceDraft.tipos[tipo] !== false;
                     return (
