@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { acessoDaPlataforma } from '@/lib/plataforma-servidor';
 
+// A agência de demonstração (data.demo, 14/11/2026) fica fora das métricas
+// da plataforma: não é cliente, não conta agência, usuário nem plano.
+const SEM_DEMO = `COALESCE(data->>'demo', '') <> 'true'`;
+
 export async function GET() {
   try {
     // Dashboard: super admin e CS.
@@ -20,11 +24,11 @@ export async function GET() {
       planDistRes,
       recentTenantsRes,
     ] = await Promise.all([
-      pool.query('SELECT COUNT(*) as cnt FROM tenants'),
-      pool.query("SELECT COUNT(*) as cnt FROM tenants WHERE status = 'ativo'"),
-      pool.query('SELECT COUNT(*) as cnt FROM usuarios'),
-      pool.query('SELECT plano, COUNT(*) as cnt FROM tenants GROUP BY plano'),
-      pool.query('SELECT data FROM tenants ORDER BY created_at DESC LIMIT 5'),
+      pool.query(`SELECT COUNT(*) as cnt FROM tenants WHERE ${SEM_DEMO}`),
+      pool.query(`SELECT COUNT(*) as cnt FROM tenants WHERE status = 'ativo' AND ${SEM_DEMO}`),
+      pool.query(`SELECT COUNT(*) as cnt FROM usuarios WHERE tenant_id NOT IN (SELECT id FROM tenants WHERE NOT (${SEM_DEMO}))`),
+      pool.query(`SELECT plano, COUNT(*) as cnt FROM tenants WHERE ${SEM_DEMO} GROUP BY plano`),
+      pool.query(`SELECT data FROM tenants WHERE ${SEM_DEMO} ORDER BY created_at DESC LIMIT 5`),
     ]);
 
     const planDistribution: Record<string, number> = {};

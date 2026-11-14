@@ -35,6 +35,7 @@ import {
   type ItemPlanejado,
 } from './calculo';
 import { avisarCrm, crmLigado, type CobrancaParaCrm } from './crm';
+import { recusaDoProvedorNaDemo } from '../demo/saidas';
 import { levaTaxaDeBoleto } from './taxa-boleto';
 import { camposDoEnvio, lerEnvioPersonalizado } from './envio';
 import { resultadoDoEnvio } from './resultado-envio';
@@ -249,6 +250,11 @@ const fabricaPadrao: FabricaDeAdapter = async (provedor, tenantId, config) => {
   const conf = await carregarCredenciais(tenantId, provedor);
   if (!conf || !conf.config.ativo || !conf.cred.api_key) {
     throw new ErroCobranca(`Ligue a integração com o ${nomeDoProvedor(provedor)} em Configurações › Integrações antes de emitir.`, 409, 'PROVEDOR_DESLIGADO');
+  }
+  // Agência de demonstração: só o Asaas em sandbox (demo/saidas.ts).
+  if (pool) {
+    const recusa = await recusaDoProvedorNaDemo(pool as unknown as ExecutorSQL, tenantId, provedor, conf.cred.api_key);
+    if (recusa) throw new ErroCobranca(recusa, 409, 'NADA_SAI');
   }
   const antesDeChamar = () => aguardarVez(tenantId);
   return provedor === 'asaas'
