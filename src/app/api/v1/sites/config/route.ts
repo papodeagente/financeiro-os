@@ -40,6 +40,10 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Erro';
     const invalido = /inválido|Informe/.test(msg);
-    return NextResponse.json({ erro: invalido || e instanceof ErroCofre ? msg : 'Falha ao salvar integração' }, { status: invalido ? 400 : 500 });
+    const conflito = /já está pareada|exige migração/.test(msg);
+    return NextResponse.json(
+      { erro: invalido || conflito || e instanceof ErroCofre ? msg : 'Falha ao salvar integração' },
+      { status: conflito ? 409 : invalido ? 400 : 500 },
+    );
   }
 }

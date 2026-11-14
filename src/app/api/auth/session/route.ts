@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { perfilDosDados, type PerfilDaConta } from '@/lib/perfil-da-conta';
+import { SEM_MODULOS, type ModulosDaConta } from '@/lib/modulos';
+import { modulosDaConta } from '@/lib/modulos-servidor';
 
 export async function GET() {
   const session = await getSession();
@@ -14,6 +17,12 @@ export async function GET() {
   // O número da conta segue o mesmo caminho da foto, e pela mesma razão:
   // fora do JWT, ninguém precisa sair e entrar de novo para vê-lo.
   let tenantNumero: number | null = null;
+  // O perfil (agência ou ecossistema, perfil-da-conta.ts) só decide o que a
+  // tela MOSTRA; quem barra é a rota, no servidor.
+  let tenantPerfil: PerfilDaConta = 'agencia';
+  // Versão e módulos da agência (modulos.ts): também só decidem o que a tela
+  // mostra; cada rota de módulo confere de novo no servidor.
+  let tenantModulos: ModulosDaConta = SEM_MODULOS;
   try {
     await initDB();
     if (pool && session.userId) {
@@ -28,11 +37,13 @@ export async function GET() {
     const tenantDaVez = session.impersonatingTenantId || session.tenantId || '';
     if (pool && tenantDaVez) {
       const { rows } = await pool.query(
-        `SELECT numero FROM tenants WHERE id = $1 LIMIT 1`,
+        `SELECT numero, data FROM tenants WHERE id = $1 LIMIT 1`,
         [tenantDaVez],
       );
       const n = Number(rows[0]?.numero);
       if (Number.isFinite(n) && n > 0) tenantNumero = n;
+      tenantPerfil = perfilDosDados(rows[0]?.data);
+      tenantModulos = await modulosDaConta(tenantDaVez);
     }
   } catch { /* ignore */ }
 
@@ -48,6 +59,8 @@ export async function GET() {
       tenantId: session.tenantId,
       tenantSlug: session.tenantSlug,
       tenantNumero,
+      tenantPerfil,
+      tenantModulos,
       isSuperAdmin: session.isSuperAdmin || false,
       impersonatingTenantId: session.impersonatingTenantId || null,
       impersonatingTenantSlug: session.impersonatingTenantSlug || null,

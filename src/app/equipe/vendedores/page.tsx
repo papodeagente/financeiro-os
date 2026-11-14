@@ -23,6 +23,8 @@ import { Unidades, type Unidade } from '@/components/fin/Unidades';
 import { RecordSheet } from '@/components/fin/RecordSheet';
 import { toast } from '@/lib/toast';
 import { perfilCanonico } from '@/lib/permissoes';
+import { planoUsaMrr, ROTULOS_BASE_COMISSAO } from '@/lib/plano-comissao';
+import { faixasEmPalavras, normalizarFaixas } from '@/lib/comissao-mrr';
 
 interface PessoaDaEquipe extends Membro {
   membro_ids_legado: string[];
@@ -528,12 +530,22 @@ export default function VendedoresPage() {
                     }));
                     return (
                       <div key={plano.id} className={`${CARTAO} p-[var(--fin-s-4)]`}>
-                        {faixas.length > 0 ? (
+                        {planoUsaMrr(plano) ? (
+                          <div className="flex flex-col gap-1">
+                            <p className="fin-t-body-strong text-[var(--fin-text)]">{plano.nome}</p>
+                            <p className="fin-t-metric-sm text-[var(--fin-text)]">MRR gerado</p>
+                            <p className="fin-t-caption text-[var(--fin-text-3)]">
+                              {normalizarFaixas(plano.mrr?.faixas).length
+                                ? faixasEmPalavras(normalizarFaixas(plano.mrr?.faixas))
+                                : 'Sem faixas de MRR — revisar'}
+                            </p>
+                          </div>
+                        ) : faixas.length > 0 ? (
                           <EscadaDeFaixas
                             modo="degraus"
                             faixas={faixas}
                             nomePlano={plano.nome}
-                            baseDoCalculo={`sobre ${String(plano.base_calculo ?? 'a base da venda').toLowerCase()}`}
+                            baseDoCalculo={`sobre ${(ROTULOS_BASE_COMISSAO[plano.base_calculo] ?? 'a base da venda').toLowerCase()}`}
                             escalaTravada={escalaDosPlanos}
                             formatar={BRL}
                           />
@@ -544,7 +556,7 @@ export default function VendedoresPage() {
                             <p className="fin-t-metric-sm text-[var(--fin-text)]">{`${num(plano.percentual_padrao)}%`}</p>
                             <p className="fin-t-caption text-[var(--fin-text-3)]">
                               {num(plano.percentual_padrao) > 0
-                                ? `fixo, sobre ${String(plano.base_calculo ?? 'a base da venda').toLowerCase()}`
+                                ? `fixo, sobre ${(ROTULOS_BASE_COMISSAO[plano.base_calculo] ?? 'a base da venda').toLowerCase()}`
                                 : 'Este plano não paga nada — revisar'}
                             </p>
                           </div>
@@ -645,7 +657,9 @@ export default function VendedoresPage() {
                 <option value="">Sem plano, não gera comissão</option>
                 {planosAtivos.map(x => (
                   <option key={x.id} value={x.id}>
-                    {`${x.nome} · ${(x.faixas ?? []).length > 0 ? `${(x.faixas ?? []).length} faixas` : `${num(x.percentual_padrao)}% fixo`} · ${String(x.base_calculo ?? '').toLowerCase() || 'base da venda'}`}
+                    {planoUsaMrr(x)
+                      ? `${x.nome} · MRR gerado · ${normalizarFaixas(x.mrr?.faixas).length} faixas`
+                      : `${x.nome} · ${(x.faixas ?? []).length > 0 ? `${(x.faixas ?? []).length} faixas` : `${num(x.percentual_padrao)}% fixo`} · ${(ROTULOS_BASE_COMISSAO[x.base_calculo] ?? 'base da venda').toLowerCase()}`}
                   </option>
                 ))}
               </select>

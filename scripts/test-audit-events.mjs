@@ -1,15 +1,21 @@
 /** Executa os handlers reais com I/O isolado: identidade, segredos e atomicidade dos eventos explícitos. */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import vm from 'node:vm';
 import ts from 'typescript';
 
 const root = path.resolve(import.meta.dirname, '..');
+const requireNative = createRequire(import.meta.url);
 let checks = 0;
+// Administrador e superadmin entram com senha e código do aplicativo
+// (FIN-12): o cadastro de teste já tem o aplicativo, e o login manda o código
+// do momento. Quem não é administrador e não cadastrou entra só com a senha.
+const SEGREDO_TOTP = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
 const usuario = {
   id: 'usuario-1', nome: 'Pessoa', email: 'pessoa@example.test', perfil: 'ADMIN',
-  ativo: true, permissoes: {}, senha_hash: 'hash-que-nao-pode-ir-para-o-log',
+  ativo: true, permissoes: {}, senha_hash: 'hash-que-nao-pode-ir-para-o-log', totp_segredo: SEGREDO_TOTP,
 };
 const sessao = {
   userId: usuario.id, nome: usuario.nome, email: usuario.email, perfil: 'ADMIN',
@@ -17,7 +23,11 @@ const sessao = {
 };
 const registroUsuario = { data: usuario, tenant_id: 'agencia-1', tenant_slug: 'agencia', tenant_status: 'ativo' };
 
+// Imagem PNG de verdade (cabeçalho): as rotas conferem o tipo pelos bytes.
+const PNG = Buffer.from('89504e470d0a1a0a0000000d494844520000000100000001', 'hex');
+
 function ambiente(opcoes = {}) {
+  const buscar = opcoes.fetch ?? (async () => new Response(PNG, { headers: { 'content-type': 'image/png' } }));
   const eventos = [];
   const arquivos = new Map();
   const ordem = [];
@@ -34,11 +44,15 @@ function ambiente(opcoes = {}) {
     },
     '@/lib/db': {
       __esModule: true,
-      default: { query: opcoes.query ?? (async () => ({ rows: opcoes.rows ?? [registroUsuario] })) },
+      // UPDATE (ex.: o passo do código do aplicativo já usado) afeta uma linha.
+      default: { query: opcoes.query ?? (async (sql) => (/^\s*UPDATE/i.test(String(sql))
+        ? { rows: [], rowCount: 1 }
+        : { rows: opcoes.rows ?? [registroUsuario] })) },
       initDB: async () => {},
     },
     '@/lib/auth': {
       COOKIE_NAME: 'entur-session',
+      duracaoDaSessao: p => (p?.lembrar === true ? 15 * 24 * 60 * 60 : 12 * 60 * 60),
       getSession: async () => Object.hasOwn(opcoes, 'session') ? opcoes.session : sessao,
       verifyPassword: async () => opcoes.senhaValida ?? true,
       createSession: async () => 'jwt-que-nao-pode-ir-para-o-log',
@@ -55,6 +69,15 @@ function ambiente(opcoes = {}) {
       },
     },
     '@/lib/utils': { generateId: () => `arquivo-${++ids}` },
+    // A guarda de saída (só https, sem rede interna) consulta o DNS: aqui o
+    // download vai direto ao fetch isolado do teste.
+    '@/lib/saida-segura': {
+      baixarImagemSegura: async url => {
+        const r = await buscar(url);
+        if (!r.ok) throw new Error('falhou');
+        return { bytes: Buffer.from(await r.arrayBuffer()), final: url };
+      },
+    },
     '@/lib/comprovantes': {
       pastaComprovantes: async () => '/isolado/comprovantes/agencia-1',
       TIPOS_COMPROVANTE: { 'application/pdf': 'pdf' },
@@ -71,33 +94,58 @@ function ambiente(opcoes = {}) {
     },
     path,
   };
-  function carregar(rota) {
-    const filename = path.join(root, 'src/app/api', rota, 'route.ts');
-    const fonte = readFileSync(filename, 'utf8');
-    const { outputText } = ts.transpileModule(fonte, {
+  // Módulos de src/lib sem mock próprio (permissões, segundo fator, limite de
+  // login...) carregam o código real, com as MESMAS trocas de I/O: banco,
+  // sessão, auditoria e arquivos continuam isolados. Antes, cada import novo
+  // numa rota exigia um mock à mão e o teste quebrava com "Mock ausente".
+  const carregados = new Map();
+  const DIR_LIB = path.join(root, 'src/lib');
+  function resolverNome(nome, deQuem) {
+    if (nome in mocks) return { mock: mocks[nome] };
+    let alvo = null;
+    if (nome.startsWith('@/')) alvo = path.join(root, 'src', nome.slice(2));
+    else if (nome.startsWith('.')) alvo = path.resolve(path.dirname(deQuem), nome);
+    if (!alvo) return { mock: requireNative(nome) };
+    // './db' dentro de src/lib é o mesmo '@/lib/db' que o teste trocou.
+    const relLib = path.relative(DIR_LIB, alvo);
+    if (!relLib.startsWith('..') && `@/lib/${relLib}` in mocks) return { mock: mocks[`@/lib/${relLib}`] };
+    for (const ext of ['.ts', '.tsx', '/index.ts']) if (existsSync(alvo + ext)) return { arquivo: alvo + ext };
+    throw new Error(`Módulo não encontrado: ${nome}`);
+  }
+  function executar(filename) {
+    if (carregados.has(filename)) return carregados.get(filename).exports;
+    const { outputText } = ts.transpileModule(readFileSync(filename, 'utf8'), {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
       fileName: filename,
     });
     const loadedModule = { exports: {} };
+    carregados.set(filename, loadedModule);
     vm.runInNewContext(outputText, {
       module: loadedModule, exports: loadedModule.exports,
       require: nome => {
-        if (!(nome in mocks)) throw new Error(`Mock ausente: ${nome}`);
-        return mocks[nome];
+        const r = resolverNome(nome, filename);
+        return 'mock' in r ? r.mock : executar(r.arquivo);
       },
-      Response, Request, File, Buffer, AbortController, setTimeout, clearTimeout, console,
+      Response, Request, File, Buffer, AbortController, setTimeout, clearTimeout, console, URL, TextEncoder, TextDecoder,
       process: { env: { NODE_ENV: 'test' }, cwd: () => '/isolado' },
-      fetch: opcoes.fetch ?? (async () => new Response('imagem', { headers: { 'content-type': 'image/png' } })),
+      fetch: buscar,
     }, { filename });
     return loadedModule.exports;
   }
-  return { carregar, eventos, arquivos, ordem };
+  function carregar(rota) {
+    return executar(path.join(root, 'src/app/api', rota, 'route.ts'));
+  }
+  const carregarLib = nome => executar(path.join(root, 'src/lib', `${nome}.ts`));
+  return { carregar, carregarLib, eventos, arquivos, ordem };
 }
 
 const json = (rota, body) => new Request(`https://example.test/api/${rota}`, {
-  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Real-IP': '10.0.0.1' }, body: JSON.stringify(body),
 });
-const login = () => json('auth/login', { email: usuario.email, senha: 'senha-confidencial', nome: 'Ator forjado' });
+// O código do aplicativo do momento, calculado pelo próprio módulo de produção.
+const { codigoDoPasso } = ambiente().carregarLib('segundo-fator');
+const codigoAgora = () => codigoDoPasso(SEGREDO_TOTP, Math.floor(Date.now() / 30000));
+const login = () => json('auth/login', { email: usuario.email, senha: 'senha-confidencial', nome: 'Ator forjado', codigo: codigoAgora() });
 function semSegredos(eventos) {
   const texto = JSON.stringify(eventos);
   for (const proibido of ['senha-confidencial', usuario.senha_hash, 'jwt-que-nao-pode-ir-para-o-log', 'chave-confidencial']) {
@@ -120,6 +168,19 @@ await testar('login identifica a sessão validada e audita antes do cookie', asy
   assert.equal(a.eventos[0].tenantId, 'agencia-1');
   assert.deepEqual(a.ordem.map(x => x[0]), ['audit', 'cookie']);
   semSegredos(a.eventos);
+});
+
+await testar('quem paga sem ser administrador: código só depois de cadastrar o aplicativo (E7)', async () => {
+  const semAplicativo = { ...usuario, perfil: 'OPERADOR', totp_segredo: undefined };
+  const a = ambiente({ rows: [{ ...registroUsuario, data: semAplicativo }] });
+  const semCodigo = json('auth/login', { email: usuario.email, senha: 'senha-confidencial' });
+  assert.equal((await a.carregar('auth/login').POST(semCodigo)).status, 200, 'sem aplicativo: entra só com a senha');
+  const b = ambiente({ rows: [{ ...registroUsuario, data: { ...usuario, perfil: 'OPERADOR' } }] });
+  const resposta = await b.carregar('auth/login').POST(json('auth/login', { email: usuario.email, senha: 'senha-confidencial' }));
+  assert.equal(resposta.status, 401, 'com aplicativo cadastrado: pede o código');
+  assert.equal((await resposta.json()).precisa_codigo, true);
+  const c = ambiente({ rows: [{ ...registroUsuario, data: { ...usuario, perfil: 'OPERADOR' } }] });
+  assert.equal((await c.carregar('auth/login').POST(login())).status, 200, 'com o código, entra');
 });
 
 await testar('senha incorreta não atribui tentativa ao usuário autenticado', async () => {
@@ -210,7 +271,8 @@ await testar('uploads e comprovantes auditam metadados e compensam falha de pers
     for (const auditFalha of [false, true]) {
       const a = ambiente({ auditFalha });
       const form = new FormData();
-      form.append('files', new File(['CONTEUDO-NAO-AUDITAVEL'], 'recibo.pdf', { type: 'application/pdf' }));
+      // O conteúdo começa como PDF de verdade: a rota confere o tipo pelos bytes.
+      form.append('files', new File(['%PDF-1.4\n% CONTEUDO-NAO-AUDITAVEL'], 'recibo.pdf', { type: 'application/pdf' }));
       const resposta = await a.carregar(rota).POST(new Request(`https://example.test/api/${rota}`, { method: 'POST', body: form }));
       assert.equal(resposta.status, auditFalha ? 500 : 200);
       assert.equal(a.arquivos.size, auditFalha ? 0 : 1);
@@ -243,7 +305,7 @@ await testar('importação audita cada novo arquivo; ignora local e omite URL re
 await testar('imagem gerada registra arquivo salvo sem prompt ou credenciais', async () => {
   const a = ambiente({
     rows: [{ data: { openai: { ativo: true, api_key: 'chave-confidencial' } } }],
-    fetch: async () => Response.json({ data: [{ b64_json: Buffer.from('imagem').toString('base64') }] }),
+    fetch: async () => Response.json({ data: [{ b64_json: PNG.toString('base64') }] }),
   });
   const resposta = await a.carregar('ai/imagem').POST(json('ai/imagem', { prompt: 'PROMPT-PRIVADO' }));
   assert.equal(resposta.status, 200);

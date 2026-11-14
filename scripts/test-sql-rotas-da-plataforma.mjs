@@ -100,15 +100,17 @@ eq([
 ], [true, true, true, true, true, true, true], 'o CS passa nas travas do dashboard, das agências (leitura) e do suporte');
 
 const planos = await import('../src/app/api/admin/planos/route.ts');
+const cofre = await import('../src/app/api/admin/cofre-plataforma/route.ts');
 const impersonar = await import('../src/app/api/admin/tenants/[id]/impersonate/route.ts');
 const suspender = await import('../src/app/api/admin/tenants/[id]/suspend/route.ts');
 eq([
   passa((await planos.GET()).status),
+  passa((await cofre.GET()).status),
   passa((await tenants.POST(json('/api/admin/tenants', 'POST', { nome: 'X' }))).status),
   passa((await tenant.PUT(json('/api/admin/tenants/ag-1', 'PUT', { nome: 'X' }), ctx('ag-1'))).status),
   passa((await impersonar.POST(json('/api/admin/tenants/ag-1/impersonate', 'POST'), ctx('ag-1'))).status),
   passa((await suspender.POST(json('/api/admin/tenants/ag-1/suspend', 'POST'), ctx('ag-1'))).status),
-], [false, false, false, false, false], 'o CS é barrado em planos, criar e editar agência, entrar como agência e suspender');
+], [false, false, false, false, false, false], 'o CS é barrado em planos, cofre, criar e editar agência, entrar como agência e suspender');
 
 // ══════════════════════════════════════════════════════════════════════
 console.log('\n--- (c) sessão de agência ---');

@@ -27,6 +27,7 @@
 
 import {
   ErroFiscal,
+  respostaNaoERecusa,
   buscarArquivo,
   statusDoGateway,
   textoDoErro,
@@ -159,11 +160,14 @@ async function chamar(
       throw new ErroFiscal(
         'A AceleraAPI não respondeu a tempo. A nota pode ter sido enviada: '
         + 'consulte em Notas fiscais antes de emitir de novo.',
+        '',
+        true,
       );
     }
     throw new ErroFiscal(
       'Não foi possível falar com a AceleraAPI.',
       e instanceof Error ? e.message : '',
+      true,
     );
   } finally {
     clearTimeout(timer);
@@ -204,7 +208,8 @@ export function montarCorpoEmissao(entrada: {
     // O valor tributável da nota. Em intermediação isto é a comissão: o
     // repasse ao fornecedor não é receita da agência e não entra aqui.
     valor_servico: nota.valor_servicos,
-    data_competencia: (nota.emitida_em || '').slice(0, 10) || undefined,
+    // A data escolhida pela agência (dia, venda ou embarque) vence; sem ela, a da emissão.
+    data_competencia: (nota.data_competencia || nota.emitida_em || '').slice(0, 10) || undefined,
     cod_interno: codigoInterno(nota.id),
   };
   if (nota.tomador.email) corpo.tomador_email = nota.tomador.email;
@@ -421,6 +426,15 @@ export class EmissorAceleraAPI implements EmissorNFSe {
       this.token(entrada.config),
     );
     if (!r.ok) {
+      // Falha do lado do emissor ou "já existe" (o cod_interno já foi usado:
+      // a nota pode ter saído na tentativa anterior) NÃO é recusa (FIN2-09).
+      if (respostaNaoERecusa(r.httpStatus, `${r.codigoErro} ${r.mensagemErro}`)) {
+        throw new ErroFiscal(
+          `A AceleraAPI não confirmou a nota (${r.mensagemErro || `HTTP ${r.httpStatus}`}). Ela pode ter sido emitida: confira no painel do emissor antes de emitir de novo.`,
+          '',
+          true,
+        );
+      }
       // `emissao_rejeitada` quer dizer "a SEFIN recusou OU falta configuração".
       // Sem dizer qual das duas, a mensagem não ajuda ninguém: então pergunta
       // ao emissor o que ele ainda considera pendente e mostra junto.

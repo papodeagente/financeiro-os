@@ -7,6 +7,7 @@
 
 import pool from './db';
 import { isCanonicalHost, extractHost } from './canonical-hosts';
+import { resolverPropostaPublica, type Consulta } from './proposta-publica';
 
 // Host autorizado a servir proposta pública.
 //   - Sem header de host (CLI, chamada interna): autorizado.
@@ -18,20 +19,16 @@ export function isHostAuthorizedForProposta(req: Request): boolean {
   return isCanonicalHost(host);
 }
 
-// Carrega a proposta pelo slug, já checando que o host pode servi-la.
+// Carrega a proposta pelo endereço público (token, ou id só para propostas
+// antigas dentro do prazo), já checando que o host pode servi-la. `data` é o
+// registro inteiro, para uso do servidor; para o navegador, use paraPublico.
 export async function resolvePropostaForHost(
   req: Request,
   slug: string,
-): Promise<{ ok: false } | { ok: true; data: unknown; tenantId: string }> {
+): Promise<{ ok: false } | { ok: true; id: string; data: Record<string, unknown>; tenantId: string; linkPublico: string | null }> {
   if (!pool) return { ok: false };
-  if (!/^[\w-]+$/.test(slug) || slug.length < 10) return { ok: false };
   if (!isHostAuthorizedForProposta(req)) return { ok: false };
-
-  const { rows } = await pool.query(
-    `SELECT tenant_id, data FROM propostas WHERE id = $1 LIMIT 1`,
-    [slug],
-  );
-  if (rows.length === 0) return { ok: false };
-
-  return { ok: true, data: rows[0].data, tenantId: rows[0].tenant_id };
+  const r = await resolverPropostaPublica(pool as unknown as Consulta, slug);
+  if (!r) return { ok: false };
+  return { ok: true, id: r.id, data: r.data, tenantId: r.tenantId, linkPublico: r.linkPublico };
 }

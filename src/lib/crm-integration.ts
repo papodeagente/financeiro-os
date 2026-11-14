@@ -1,7 +1,8 @@
 import { lerPagamentoAoFornecedor } from './pagamento-ao-fornecedor';
 import pool, { initDB } from './db';
+import { abrirCrmConfig, lerCrmConfig, type Consulta as ConsultaCrm } from './crm-config-cofre';
 import { generateId } from './utils';
-import { createHmac } from 'crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import { getProdutoGrupo } from './financial-calculations';
 import type { GrupoViagem } from './types';
 import {
@@ -26,6 +27,9 @@ import { criarNotificacao } from './notificacoes';
 // PUT das rotas de conta. O helper antigo lia, somava e regravava fora de
 // transação, com o erro engolido: duas confirmações simultâneas na mesma
 // conta bancária perdiam uma das entradas.
+import { nadaSai } from './nada-sai';
+import { registrarBaixaLegada } from './baixas-servidor';
+import { dataForaDoFechamento } from './periodo-fechado';
 import { aplicarMovimentoCaixaAtomico, emTransacao, STATUS_BAIXADOS, type ExecutorSQL } from './caixa-atomico';
 import { valorMovimentado } from './saldo-bancario';
 import {
@@ -37,11 +41,22 @@ import {
   reconciliarPagamentosSemDono, descreverReconciliacao,
 } from './crm-venda-plataforma';
 import { lerPedidoDeCancelamento, aplicarCancelamentoDoCrm } from './crm-venda-cancelada';
+import { ehVendaV2 } from './venda-crm-v2';
+import { receberVendaV2DoCrm, voltarVendaParaV1 } from './venda-crm-v2-servidor';
+import { empresaDaVendaDoCrm } from './venda-crm-empresa';
+import { receberExtratoDoCrm } from './conferencia-operadora-crm-servidor';
+import { situacaoDaVenda, registrarEventoDaVenda } from './venda-servidor';
 import {
   receberFornecedorDoCrm, lerFornecedorDoCrm, lerFornecedorDaVenda, descreverFornecedor,
   cadastroCompleto, payloadParaOCrm,
 } from './fornecedor-sync';
 import { lerFichaDoCrm } from './ficha-do-cliente';
+import { lerMetricasDoCrm, TIPO_METRICAS_COMERCIAIS, type ComercialDoCrm } from './metricas-comerciais';
+import { lerMrrVendido, TIPO_MRR_VENDIDO, type MrrDoCrm } from './mrr-vendido';
+import { TIPO_COMISSAO_DO_MES } from './comissao-do-crm';
+import { receberComissaoDoMes, respostaDaComissaoRepetida, type RespostaDaComissaoDoMes } from './comissao-do-crm-servidor';
+import { motivoDaRecusa } from './crm-do-ecossistema';
+import { perfilDosDados } from './perfil-da-conta';
 
 // ──────────────────────────────────────────
 // Types
@@ -56,6 +71,8 @@ interface CrmConfig {
   retry_max: number;
   circuit_breaker_threshold: number;
   circuit_breaker_status: 'fechado' | 'aberto' | 'semi-aberto';
+  /** Preenchido quando a regra da conta recusa a integração (crm-do-ecossistema.ts). */
+  recusada?: string;
 }
 
 interface CrmStatus {
@@ -429,6 +446,45 @@ function hmacSign(body: string, secret: string): string {
   return createHmac('sha256', secret).update(body).digest('hex');
 }
 
+/** Comparação em tempo constante de duas assinaturas hex (auditoria 04/11/2026). */
+export function assinaturaIgual(esperada: string, recebida: string): boolean {
+  const a = Buffer.from(String(esperada));
+  const b = Buffer.from(String(recebida));
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** Janela aceita entre o carimbo de tempo assinado e o relógio daqui. */
+const JANELA_DO_CARIMBO_S = 300;
+
+/**
+ * Confere a assinatura de uma chamada do CRM.
+ *
+ * Formato novo (com `x-crm-timestamp`): HMAC de "<carimbo>.<corpo>", e o
+ * carimbo precisa estar a até 5 minutos do relógio daqui. Uma chamada
+ * capturada não pode ser repetida depois disso.
+ *
+ * Formato antigo (sem carimbo): HMAC só do corpo. Continua aceito durante a
+ * transição, porque o CRM em produção ainda assina assim; liga-se a exigência
+ * do carimbo com CRM_HMAC_EXIGE_TIMESTAMP=1 depois que o CRM passar a mandar.
+ * A comparação é sempre em tempo constante.
+ */
+export function assinaturaCRMConfere(
+  body: string,
+  signature: string,
+  segredo: string,
+  carimbo: string | null | undefined,
+  agora = Date.now(),
+): boolean {
+  if (!segredo || !signature) return false;
+  if (carimbo) {
+    if (!/^\d{9,11}$/.test(carimbo)) return false;
+    if (Math.abs(agora / 1000 - Number(carimbo)) > JANELA_DO_CARIMBO_S) return false;
+    return assinaturaIgual(hmacSign(`${carimbo}.${body}`, segredo), signature);
+  }
+  if (process.env.CRM_HMAC_EXIGE_TIMESTAMP === '1') return false;
+  return assinaturaIgual(hmacSign(body, segredo), signature);
+}
+
 const BACKOFF_MINUTES = [1, 5, 30, 120, 480]; // 1min, 5min, 30min, 2h, 8h
 
 function calcNextRetry(tentativas: number): Date {
@@ -437,15 +493,26 @@ function calcNextRetry(tentativas: number): Date {
   return new Date(Date.now() + ms);
 }
 
+/**
+ * A configuração da integração que vale para enviar e receber. A conta do
+ * ecossistema só se integra com a conta da Entur no CRM (crm-do-ecossistema.ts):
+ * apontando para qualquer outra, a integração volta DESLIGADA e sem segredo,
+ * e com isso nada sai, nenhuma consulta roda e nenhum evento que chega passa
+ * na assinatura. Os eventos de saída ficam pendentes até a configuração certa.
+ */
+function configQueVale(cfg: CrmConfig, dadosDaConta: unknown): CrmConfig {
+  const recusa = motivoDaRecusa(perfilDosDados(dadosDaConta), cfg?.webhook_url_crm);
+  return recusa ? { ...cfg, ativo: false, api_key_crm: '', api_key_entur: '', recusada: recusa } : cfg;
+}
+
 async function getCrmConfig(tenantId: string): Promise<CrmConfig | null> {
   if (!pool) return null;
   await initDB();
-  const { rows } = await pool.query(
-    "SELECT data FROM crm_config WHERE id = 'singleton' AND tenant_id = $1",
-    [tenantId],
-  );
-  if (rows.length === 0) return null;
-  return rows[0].data as CrmConfig;
+  // Segredo do HMAC guardado cifrado (FIN-11); lerCrmConfig abre e migra.
+  const cfg = (await lerCrmConfig(pool as unknown as ConsultaCrm, tenantId)) as CrmConfig | null;
+  if (!cfg) return null;
+  const { rows } = await pool.query(`SELECT data FROM tenants WHERE id = $1`, [tenantId]);
+  return configQueVale(cfg, rows[0]?.data);
 }
 
 // Lists every active CRM config across tenants. Used only by the legacy
@@ -454,10 +521,13 @@ async function listarCrmConfigsAtivas(): Promise<Array<{ tenantId: string; confi
   if (!pool) return [];
   await initDB();
   const { rows } = await pool.query(
-    `SELECT tenant_id, data FROM crm_config WHERE id = 'singleton'`,
+    `SELECT c.tenant_id, c.data, t.data AS conta FROM crm_config c LEFT JOIN tenants t ON t.id = c.tenant_id WHERE c.id = 'singleton'`,
   );
   return rows
-    .map(r => ({ tenantId: r.tenant_id as string, config: r.data as CrmConfig }))
+    .map(r => ({
+      tenantId: r.tenant_id as string,
+      config: configQueVale(abrirCrmConfig(r.data as Record<string, unknown>) as unknown as CrmConfig, r.conta),
+    }))
     .filter(r => r.config?.ativo);
 }
 
@@ -791,7 +861,7 @@ interface VendedorSincronizado {
   cadastroPendente: boolean;
 }
 
-async function upsertVendedorByExternalId(
+export async function upsertVendedorByExternalId(
   externalId: string,
   dados: { nome?: unknown; email?: unknown },
   tenantId: string,
@@ -822,11 +892,13 @@ async function upsertVendedorByExternalId(
         origem: 'crm',
         external_id: externalId,
       };
+      // Só os campos da integração, por cima do banco atual (não desfaz
+      // sessão revogada nem 2FA gravados no meio).
       await pool.query(
         `UPDATE usuarios
-            SET nome = $1, email = $2, data = $3, updated_at = NOW()
+            SET nome = $1, email = $2, data = data || $3::jsonb, updated_at = NOW()
           WHERE id = $4 AND tenant_id = $5`,
-        [data.nome, data.email, JSON.stringify(data), id, tenantId],
+        [data.nome, data.email, JSON.stringify({ id, nome: data.nome, email: data.email, origem: 'crm', external_id: externalId }), id, tenantId],
       );
     }
     await vincularMembroPorEmail(id, email || normalizeEmail(atual.email), tenantId);
@@ -851,9 +923,9 @@ async function upsertVendedorByExternalId(
       const data = { ...atual, id, nome: nome || asStr(atual.nome), email, external_id: externalId };
       await pool.query(
         `UPDATE usuarios
-            SET nome = $1, email = $2, data = $3, external_id = $4, updated_at = NOW()
+            SET nome = $1, email = $2, data = data || $3::jsonb, external_id = $4, updated_at = NOW()
           WHERE id = $5 AND tenant_id = $6`,
-        [data.nome, email, JSON.stringify(data), externalId, id, tenantId],
+        [data.nome, email, JSON.stringify({ id, nome: data.nome, email, external_id: externalId }), externalId, id, tenantId],
       );
       await vincularMembroPorEmail(id, email, tenantId);
       // Quem já existia aqui foi cadastrado por alguém: não é pendente.
@@ -953,14 +1025,19 @@ export async function sincronizarTodosOsFornecedores(
 // emitirEventoCRM — fire-and-forget
 // ──────────────────────────────────────────
 
+/** O que o CRM respondeu ao aviso (null = não foi ao CRM agora; fica na fila). */
+export interface RespostaDoCrm { entregue: boolean; acao: string }
+
 export async function emitirEventoCRM(
   tipo: string,
   payload: Record<string, unknown>,
   opcoes: { tenantId: string; idempotency_key?: string }
-): Promise<void> {
+): Promise<RespostaDoCrm | null> {
   try {
-    if (!pool) return;
-    if (!opcoes?.tenantId) return; // tenant context required
+    if (!pool) return null;
+    if (!opcoes?.tenantId) return null; // tenant context required
+    // Importação/ensaio em andamento: nada é avisado ao CRM (05/11/2026).
+    if (nadaSai()) return null;
     await initDB();
 
     const tenantId = opcoes.tenantId;
@@ -978,10 +1055,10 @@ export async function emitirEventoCRM(
 
     const config = await getCrmConfig(tenantId);
     if (!config || !config.ativo || config.circuit_breaker_status === 'aberto') {
-      return;
+      return null;
     }
 
-    if (!config.webhook_url_crm) return;
+    if (!config.webhook_url_crm) return null;
 
     const bodyStr = JSON.stringify(eventBody);
     const signature = hmacSign(bodyStr, config.api_key_crm || '');
@@ -994,6 +1071,9 @@ export async function emitirEventoCRM(
           'Content-Type': 'application/json',
           'x-entur-event': tipo,
           'x-entur-signature': signature,
+          // Assinatura com carimbo de tempo ("<carimbo>.<corpo>"), para o CRM
+          // passar a exigir e recusar repetição (auditoria 04/11/2026).
+          'x-entur-signature-ts': hmacSign(`${timestamp}.${bodyStr}`, config.api_key_crm || ''),
           'x-entur-event-id': id,
           'x-entur-timestamp': timestamp,
         },
@@ -1008,6 +1088,8 @@ export async function emitirEventoCRM(
           `UPDATE crm_eventos_saida SET status = 'ENVIADO', latencia_ms = $2, updated_at = NOW() WHERE id = $1`,
           [id, latencia]
         );
+        const resposta = (await res.json().catch(() => null)) as { acao?: unknown } | null;
+        return { entregue: true, acao: typeof resposta?.acao === 'string' ? resposta.acao : '' };
       } else {
         throw new Error(`HTTP ${res.status}`);
       }
@@ -1038,18 +1120,23 @@ export async function emitirEventoCRM(
   } catch {
     // Never propagate errors from CRM integration
   }
+  // Não chegou ao CRM agora: o aviso ficou na fila e sai na próxima tentativa.
+  return null;
 }
 
 // ──────────────────────────────────────────
 // processarEventoCRM — inbound events
 // ──────────────────────────────────────────
 
+/** Prazo para um evento RECEBIDO sem conclusão ser considerado órfão e retomado. */
+const PRAZO_DO_EVENTO_MIN = 10;
+
 export async function processarEventoCRM(
   tipo: string,
   payload: Record<string, unknown>,
   idempotency_key: string,
   tenantId: string,
-): Promise<{ processado: boolean; acao: string; erro?: string }> {
+): Promise<{ processado: boolean; acao: string; erro?: string; resposta?: RespostaDaComissaoDoMes }> {
   // O lock consultivo é adquirido e liberado dentro da seção crítica, no
   // próprio finally dela. Não existe mais nada a soltar no finally externo.
   try {
@@ -1080,6 +1167,11 @@ export async function processarEventoCRM(
     // Agora um client dedicado é reservado, segura o lock e é devolvido ao
     // pool no finally. hashtext devolve int4, então a chave é combinada com
     // um segundo inteiro para reduzir colisão entre eventos diferentes.
+    // Falha ao pegar a trava, ou outra entrega segurando-a agora, NÃO é
+    // "processado": a resposta é de nova tentativa (5xx pela rota), e o CRM
+    // reentrega. Antes, os dois casos respondiam 200 sem gravar nada, e o
+    // evento se perdia para sempre se a entrega concorrente falhasse
+    // (auditoria 04/11/2026, FIN2-11).
     const lockClient = await pool.connect();
     let lockAdquirido = false;
     try {
@@ -1089,11 +1181,12 @@ export async function processarEventoCRM(
       );
       lockAdquirido = lockRows[0]?.obtido === true;
     } catch {
-      lockAdquirido = false;
+      lockClient.release();
+      return { processado: false, acao: 'trava indisponível', erro: 'Falha temporária ao registrar o evento. Tente de novo.' };
     }
     if (!lockAdquirido) {
       lockClient.release();
-      return { processado: true, acao: 'evento já em processamento (entrega concorrente)' };
+      return { processado: false, acao: 'evento já em processamento (entrega concorrente)', erro: 'Evento em processamento. Tente de novo em instantes.' };
     }
     // Liberação do lock e devolução do client acontecem juntas, sempre na
     // MESMA conexão que o adquiriu.
@@ -1122,7 +1215,7 @@ export async function processarEventoCRM(
     // processamento tinha o mesmo efeito sob concorrência: o handler pede
     // outras conexões ao mesmo pool e trava esperando a si mesmo.
     let id: string;
-    let duplicata: { processado: boolean; acao: string } | null = null;
+    let duplicata: { processado: boolean; acao: string; erro?: string } | null = null;
     try {
       const { rows: existing } = await pool.query(
         `SELECT id, processado, status FROM crm_eventos_entrada WHERE idempotency_key = $1 AND tenant_id = $2`,
@@ -1133,10 +1226,26 @@ export async function processarEventoCRM(
         duplicata = { processado: true, acao: 'duplicata ignorada' };
         id = '';
       } else if (anterior && String(anterior.status ?? '') !== 'ERRO') {
-        // Registro existente que NÃO falhou = outra entrega está processando
-        // agora (ou o processo caiu antes de registrar o erro). Não duplica.
-        duplicata = { processado: true, acao: 'duplicata ignorada (em processamento)' };
-        id = '';
+        // Registro existente que NÃO falhou e não concluiu: outra entrega
+        // está processando, ou o processo caiu no meio. Com prazo (lease):
+        // dentro de PRAZO_DO_EVENTO_MIN, é "em processamento" e o CRM tenta
+        // de novo depois; passado o prazo, o registro órfão é retomado por
+        // esta entrega (FIN2-11). O caminho é idempotente (upsert por
+        // external_id + regeneração das contas), então retomar não duplica.
+        const { rows: retomado } = await pool.query(
+          `UPDATE crm_eventos_entrada
+              SET status = 'REPROCESSANDO', erro = NULL, data = $2
+            WHERE id = $1 AND tenant_id = $3 AND processado = false AND status <> 'ERRO'
+              AND COALESCE(NULLIF(data->>'received_at', '')::timestamptz, created_at) < NOW() - ($4::int * INTERVAL '1 minute')
+            RETURNING id`,
+          [anterior.id, JSON.stringify({ tipo, payload, received_at: new Date().toISOString() }), tenantId, PRAZO_DO_EVENTO_MIN],
+        );
+        if (retomado.length > 0) {
+          id = anterior.id as string;
+        } else {
+          duplicata = { processado: false, acao: 'evento em processamento', erro: 'Evento em processamento. Tente de novo em instantes.' };
+          id = '';
+        }
       } else if (anterior) {
         // Retry de um evento que falhou: reaproveita o registro e limpa o erro.
         id = anterior.id as string;
@@ -1158,11 +1267,20 @@ export async function processarEventoCRM(
       // conexão sempre volta para o pool com o lock liberado.
       await soltarLock();
     }
-    if (duplicata) return duplicata;
+    if (duplicata) {
+      // COMISSAO_DO_MES repetido e já concluído: o CRM recebe de novo o corpo
+      // da primeira vez, como "já existia" (comissao-do-crm-servidor.ts).
+      if (tipo === TIPO_COMISSAO_DO_MES && duplicata.processado) {
+        return { ...duplicata, resposta: await respostaDaComissaoRepetida(tenantId, idempotency_key) };
+      }
+      return duplicata;
+    }
 
     let acao = '';
     /** Fornecedores cujo cadastro o CRM precisa receber de volta (o vínculo). */
     const ecosDeFornecedor: string[] = [];
+    /** Corpo e status que a rota devolve ao CRM, para o evento que responde no corpo. */
+    let resposta: RespostaDaComissaoDoMes | undefined;
 
     switch (tipo) {
       case 'VENDA_FECHADA': {
@@ -1216,6 +1334,27 @@ export async function processarEventoCRM(
           acao = historico
             ? `venda ${vendaAnterior.id} está cancelada no financeiro: o reenvio histórico não a reabre`
             : `venda ${vendaAnterior.id} foi cancelada depois que este evento chegou: a nova tentativa não a reabre`;
+          break;
+        }
+
+        // Venda FECHADA no financeiro (E5, 05/11/2026) não muda pelo CRM: a
+        // mudança fica no histórico da venda e é avisada; o evento conta como
+        // processado. Quem reabre a venda pede o reenvio ao CRM.
+        if (vendaAnterior && (await situacaoDaVenda(pool as unknown as ExecutorSQL, tenantId, vendaAnterior.id)) === 'FECHADA') {
+          const numeroFechada = asStr(vendaAnterior.data.numero) || vendaAnterior.id;
+          await registrarEventoDaVenda(pool as unknown as ExecutorSQL, tenantId, vendaAnterior.id, 'mudanca_do_crm_recusada', {
+            detalhe: { evento: idempotency_key, versao_venda: ehVendaV2(payload) ? 2 : 1, valor_total: payload.valor_total ?? null },
+          });
+          await criarNotificacao({
+            tenantId,
+            tipo: 'VENDA_FECHADA_MUDANCA_CRM',
+            titulo: `Venda ${numeroFechada} mudou no CRM, mas está fechada`,
+            descricao: 'A venda está fechada no financeiro, então a mudança do CRM não entrou. Se ela vale, reabra a venda e peça ao CRM para reenviar.',
+            link: `/vendas/${vendaAnterior.id}/ficha`,
+            chaveDeduplicacao: `venda-fechada-crm:${vendaAnterior.id}:${idempotency_key}`,
+            data: { venda_id: vendaAnterior.id, crm_venda_id: crmVendaId },
+          });
+          acao = `venda ${vendaAnterior.id} está fechada no financeiro: a mudança do CRM ficou registrada no histórico da venda`;
           break;
         }
 
@@ -1350,6 +1489,21 @@ export async function processarEventoCRM(
         // de comissão por produto casar — sem eles a regra é ignorada e a
         // comissão sai no percentual padrão. Ver src/lib/venda-crm-produtos.ts.
         const produtosDaVenda = produtosDoPayload(payload);
+        // A empresa da venda (E7, várias empresas): só quando o CRM a manda
+        // (`empresa_cnpj`/`empresa_id`). Sem o campo, nada muda: a venda nova
+        // nasce na principal pelo gatilho e a que existe fica onde está.
+        const empresa = await empresaDaVendaDoCrm(pool as unknown as ExecutorSQL, tenantId, payload, { vendaNova: !vendaJaExiste });
+        if (empresa.aviso) {
+          await criarNotificacao({
+            tenantId,
+            tipo: 'VENDA_EMPRESA_NAO_ENCONTRADA',
+            titulo: `Venda ${numeroVenda}: empresa do CRM não encontrada`,
+            descricao: `${empresa.aviso} Confira o CNPJ em Configurações › Empresas ou no CRM e, se for preciso, mude a empresa na venda.`,
+            link: `/vendas/${vendaId}`,
+            data: { venda_id: vendaId, empresa_cnpj: asStr(payload.empresa_cnpj), empresa_id: asStr(payload.empresa_id) },
+            chaveDeduplicacao: `venda-empresa:${vendaId}:${asStr(payload.empresa_cnpj) || asStr(payload.empresa_id)}`,
+          });
+        }
         const vendaData: VendaCRM & Record<string, unknown> = {
           ...baseVenda,
           id: vendaId,
@@ -1403,6 +1557,7 @@ export async function processarEventoCRM(
             formaInformada ?? 'AVISTA_PIX',
             parcelasCliente.length || 1,
           ),
+          ...(empresa.empresa_id ? { empresa_id: empresa.empresa_id } : {}),
         };
         // A reentrega atualiza também as colunas: o cliente pode ter mudado
         // no CRM, e a venda fechada de novo volta a ser CONFIRMADO na coluna,
@@ -1416,6 +1571,56 @@ export async function processarEventoCRM(
            WHERE vendas_crm.tenant_id = EXCLUDED.tenant_id`,
           [vendaId, clienteId, vendedorId, JSON.stringify(vendaData), tenantId]
         );
+
+        // VENDA_FECHADA v2 (E5, 05/11/2026): a venda completa (produtos,
+        // passageiros, componentes de receita, quem cobra, moeda, pagamentos
+        // por forma) entra pelo MESMO modelo e gerador da venda lançada à mão
+        // (venda-servidor.ts). A v1 segue exatamente o caminho de sempre,
+        // logo abaixo.
+        if (ehVendaV2(payload)) {
+          const v2 = await receberVendaV2DoCrm({
+            tenantId, payload, vendaId, numero: numeroVenda, dataVenda,
+            cliente: { id: clienteId, nome: asStr(payload.cliente_nome), id_externo: clienteExternalId },
+            vendedor: vendedorId ? { id: vendedorId, nome: vendedorNome, id_externo: vendedorExternalId } : null,
+            grupoId: asStr(payload.entur_grupo_id) || null,
+            cabecalho: vendaData,
+          });
+          ecosDeFornecedor.push(...v2.ecos);
+          if (vendedorPendente) {
+            await criarNotificacao({
+              tenantId,
+              tipo: 'VENDA_VENDEDOR_NAO_CADASTRADO',
+              titulo: `Venda ${numeroVenda} recebida com vendedor não cadastrado`,
+              descricao: `${vendedorNome || 'O vendedor'} fechou esta venda no CRM mas não está cadastrado no financeiro. A venda entrou normalmente. A comissão não vai ser calculada e a venda não conta para nenhuma meta enquanto a pessoa não for cadastrada em Configurações, Usuários.`,
+              link: `/vendas/${vendaId}`,
+              vendedorId,
+              data: { venda_id: vendaId, vendedor_external_id: vendedorExternalId, vendedor_nome: vendedorNome },
+            });
+          }
+          const pagamentosV2 = await emTransacao(exec => vincularPagamentosDaVendaCRM(exec, tenantId, vendaId, {
+            plataforma: carimbo.crm_plataforma_origem,
+            transacoes: carimbo.vincular,
+          }));
+          let sobreProcuraV2 = '';
+          try {
+            const procura = await emTransacao(exec => reconciliarPagamentosSemDono(exec, tenantId, vendaId));
+            sobreProcuraV2 = descreverReconciliacao(procura);
+          } catch (e) {
+            sobreProcuraV2 = `procura de pagamento sem dono falhou: ${e instanceof Error ? e.message : String(e)}`;
+          }
+          const sobrePagamentoV2 = [descreverPagamentos(pagamentosV2, carimbo.conflito), sobreProcuraV2].filter(Boolean).join('; ');
+          acao = `venda ${vendaJaExiste ? 'atualizada' : 'criada'} (${vendaId}) pelo contrato v2: ${v2.venda.produtos.length} produtos, ${v2.venda.pagamentos.length} pagamentos; contas: ${v2.contas.criadas} criadas, ${v2.contas.atualizadas} atualizadas, ${v2.contas.removidas} removidas, ${v2.contas.preservadas} preservadas`
+            + (v2.pendencias.length ? `; ${v2.pendencias.length} pendência(s) de crédito do cliente` : '')
+            + (v2.avisos.length ? `; avisos: ${[...new Set(v2.avisos.map(a => a.codigo))].join(', ')}` : '')
+            + (vendedorPendente ? ' [vendedor nao cadastrado]' : '')
+            + `; ${descreverCliente(cliente)}`
+            + (sobrePagamentoV2 ? `; ${sobrePagamentoV2}` : '')
+            + (empresa.aviso ? `; ${empresa.aviso}` : '')
+            + (historico ? '; reenvio histórico do CRM' : '');
+          break;
+        }
+        // A v1 de uma venda que estava no modelo completo: ela volta à v1.
+        await voltarVendaParaV1(pool as unknown as ExecutorSQL, tenantId, vendaId).catch(() => false);
 
         // 3) Cria itens_venda + contas via fluxo UNIFICADO (mesma lógica
         //    de venda manual /vendas/nova).
@@ -1735,17 +1940,27 @@ export async function processarEventoCRM(
           + (pagosDireto > 0 ? `; ${pagosDireto} pago(s) direto ao fornecedor, comissão de R$ ${contasGen.resumo.total_comissoes.toFixed(2)} a receber` : '')
           + `; ${descreverCliente(cliente)}`
           + (sobrePagamento ? `; ${sobrePagamento}` : '')
+          + (empresa.aviso ? `; ${empresa.aviso}` : '')
           + (historico ? '; reenvio histórico do CRM' : '');
         break;
       }
 
       case 'PAGAMENTO_CONFIRMADO': {
-        const { entur_venda_id, parcela: numParcela, valor, data_pagamento } = payload;
+        const { parcela: numParcela, valor, data_pagamento } = payload;
+        // O CRM conhece a própria venda (crm_venda_id), não o id daqui: com
+        // ele, acha a venda que a VENDA_FECHADA criou (E5).
+        let entur_venda_id = asStr(payload.entur_venda_id);
+        if (!entur_venda_id && asStr(payload.crm_venda_id)) {
+          const { rows: achada } = await pool.query(
+            `SELECT id FROM vendas_crm WHERE tenant_id = $1 AND data->>'crm_venda_id' = $2 ORDER BY created_at DESC LIMIT 1`,
+            [tenantId, asStr(payload.crm_venda_id)]);
+          entur_venda_id = achada[0] ? String(achada[0].id) : '';
+        }
         // A parcela é OBRIGATÓRIA: sem ela, o casamento pegaria todas as
         // contas da venda e marcaria tudo como recebido com um pagamento só.
         const parcelaAlvo = Number(numParcela);
         if (!entur_venda_id || !Number.isFinite(parcelaAlvo) || parcelaAlvo < 1) {
-          acao = 'PAGAMENTO_CONFIRMADO sem entur_venda_id/parcela válida';
+          acao = 'PAGAMENTO_CONFIRMADO sem venda (entur_venda_id ou crm_venda_id) ou parcela válida';
           break;
         }
         const { rows: receber } = await pool.query(
@@ -1753,8 +1968,22 @@ export async function processarEventoCRM(
           [entur_venda_id, tenantId]
         );
         let baixadas = 0;
+        // Venda completa (E5): várias formas de pagamento têm a sua parcela 1.
+        // O CRM diz qual pelo `pagamento_ref`; sem ele, só baixa quando há uma
+        // conta só com aquele número de parcela (a v1 segue igual).
+        const refPagamento = asStr(payload.pagamento_ref) ? `crm:pag:${asStr(payload.pagamento_ref)}` : '';
+        const candidatasV2 = receber.filter(r => {
+          const d = r.data as Record<string, unknown>;
+          return Number(d.venda_modelo) === 2 && Number(d.parcela_numero) === parcelaAlvo && String(d.origem ?? 'VENDA') === 'VENDA'
+            && (!refPagamento || String(d.venda_pagamento_id ?? '') === refPagamento);
+        });
+        if (!refPagamento && candidatasV2.length > 1) {
+          acao = `parcela ${parcelaAlvo} da venda ${entur_venda_id} é ambígua (${candidatasV2.length} formas de pagamento): o CRM precisa mandar pagamento_ref`;
+          break;
+        }
         for (const row of receber) {
           const d = row.data as Record<string, unknown>;
+          if (refPagamento && Number(d.venda_modelo) === 2 && String(d.venda_pagamento_id ?? '') !== refPagamento) continue;
           // O campo persistido é parcela_numero (ver gerarContasVenda);
           // e a baixa vale só para a parcela do CLIENTE, não para a
           // comissão a receber do fornecedor da mesma venda.
@@ -1786,26 +2015,47 @@ export async function processarEventoCRM(
 
           const statusAlvo = quitou ? 'RECEBIDO' : 'PARCIAL';
           d.status = statusAlvo;
-          d.data_recebimento = data_pagamento || hojeISO();
-          d.valor_recebido = acumulado;
-          const upd = await pool.query(
-            `UPDATE contas_receber SET status = $4, data = $2, updated_at = NOW()
-              WHERE id = $1 AND tenant_id = $3
-                AND COALESCE(data->>'valor_recebido', '0')::numeric = $5::numeric
-                AND COALESCE(data->>'status', '') IS DISTINCT FROM 'RECEBIDO'`,
-            [row.id, JSON.stringify(d), tenantId, statusAlvo, jaRecebido]
+          // Pagamento com data num período já fechado entra no dia seguinte ao
+          // fechamento; a data informada pelo CRM fica guardada (05/11/2026).
+          const dataInformada = String(data_pagamento || hojeISO()).slice(0, 10);
+          d.data_recebimento = await dataForaDoFechamento(
+            pool as unknown as ExecutorSQL, tenantId, (d.conta_bancaria_id as string) || null, dataInformada,
           );
-          if ((upd.rowCount ?? 0) > 0) {
-            baixadas++;
-            // Movimento ATÔMICO e só do que entrou agora. A versão antiga
-            // usava o helper de ler-modificar-gravar, que perde escritas
-            // concorrentes e engole o erro em silêncio.
+          if (d.data_recebimento !== dataInformada) d.data_pagamento_informada = dataInformada;
+          d.valor_recebido = acumulado;
+          // Baixa da conta e movimento de caixa na MESMA transação
+          // (05/11/2026): antes eram dois passos soltos, e uma falha entre
+          // eles deixava a conta RECEBIDA sem o dinheiro no saldo.
+          const baixou = await emTransacao(async exec => {
+            const upd = await exec.query(
+              `UPDATE contas_receber SET status = $4, data = $2, updated_at = NOW()
+                WHERE id = $1 AND tenant_id = $3
+                  AND COALESCE(data->>'valor_recebido', '0')::numeric = $5::numeric
+                  AND COALESCE(data->>'status', '') IS DISTINCT FROM 'RECEBIDO'`,
+              [row.id, JSON.stringify(d), tenantId, statusAlvo, jaRecebido]
+            );
+            if ((upd.rowCount ?? 0) === 0) return false;
+            await registrarBaixaLegada(exec, {
+              tenantId, tabela: 'contas_receber', tituloId: String(row.id), dadosAntes: row.data as Record<string, unknown>,
+              conta: (d.conta_bancaria_id as string) || null, caixa: +delta, data: String(d.data_recebimento ?? ''), origem: 'crm',
+            });
+            // Movimento ATÔMICO e só do que entrou agora.
             await aplicarMovimentoCaixaAtomico(
               tenantId,
               (d.conta_bancaria_id as string) || null,
               +delta,
+              exec,
+              {
+                tipo: 'crm_pagamento',
+                tabela: 'contas_receber',
+                id: String(row.id),
+                pessoaId: typeof d.cliente_id === 'string' && d.cliente_id ? d.cliente_id : undefined,
+                descricao: `Pagamento confirmado pelo CRM (parcela ${parcelaAlvo})`,
+              },
             );
-          }
+            return true;
+          });
+          if (baixou) baixadas++;
         }
         acao = baixadas > 0
           ? `pagamento confirmado parcela ${parcelaAlvo} (${baixadas} conta(s) baixada(s))`
@@ -2047,6 +2297,17 @@ export async function processarEventoCRM(
         break;
       }
 
+      case 'EXTRATO_CONSOLIDADORA': {
+        // O extrato de comissão que o CRM já lê na Conciliação (E7 frente E):
+        // vira uma conferência de operadora A REVISAR. Nada é aplicado
+        // sozinho; a comissão de cada linha entra no esperado × recebido.
+        const r = await emTransacao(exec => receberExtratoDoCrm(exec, tenantId, payload));
+        if (r.ecoar) ecosDeFornecedor.push(r.ecoar);
+        if (r.aviso) await criarNotificacao(r.aviso);
+        acao = r.acao;
+        break;
+      }
+
       case 'FORNECEDORES_SINCRONIZAR': {
         // O CRM pediu a lista completa. Vai em segundo plano: a resposta ao
         // CRM não pode esperar um envio por fornecedor.
@@ -2056,6 +2317,36 @@ export async function processarEventoCRM(
         );
         void sincronizarTodosOsFornecedores(tenantId, { pedirOsDoCrm: false });
         acao = `${rows[0]?.n ?? 0} fornecedores enviados ao CRM`;
+        break;
+      }
+
+      // Comissão do mês da equipe comercial da Entur, apurada na Área Comercial
+      // do CRM (05/11/2026, D31 a D40). Só na conta do ecossistema. Responde no
+      // corpo: criada, atualizada, já existia ou recusada com o motivo
+      // (comissao-do-crm-servidor.ts; contrato em docs/integracao-crm.md).
+      case TIPO_COMISSAO_DO_MES: {
+        const r = await receberComissaoDoMes(tenantId, payload, idempotency_key, {
+          pessoa: (externalId, dados) => upsertVendedorByExternalId(externalId, dados, tenantId),
+        });
+        if (!r.corpo.ok) {
+          // Recusa não conclui o evento: fica como ERRO, com o motivo, e a
+          // mesma entrega é avaliada de novo quando voltar (a conta pode ter
+          // virado ecossistema, o extrato pode ter sido corrigido).
+          await pool.query(
+            `UPDATE crm_eventos_entrada
+                SET status = 'ERRO', erro = $2, data = COALESCE(data, '{}'::jsonb) || jsonb_build_object('resposta', $3::jsonb)
+              WHERE id = $1 AND tenant_id = $4`,
+            [id, `Recusado: ${r.corpo.motivo}`, JSON.stringify(r), tenantId],
+          );
+          return { processado: false, acao: `${TIPO_COMISSAO_DO_MES} recusado: ${r.corpo.motivo}`, erro: r.corpo.motivo, resposta: r };
+        }
+        await pool.query(
+          `UPDATE crm_eventos_entrada SET data = COALESCE(data, '{}'::jsonb) || jsonb_build_object('resposta', $2::jsonb)
+            WHERE id = $1 AND tenant_id = $3`,
+          [id, JSON.stringify(r), tenantId],
+        );
+        resposta = r;
+        acao = `comissão ${r.corpo.comissaoId} ${r.corpo.situacao}${r.corpo.contaPagarId ? `, conta a pagar ${r.corpo.contaPagarId}` : ''}`;
         break;
       }
 
@@ -2077,7 +2368,7 @@ export async function processarEventoCRM(
     // Depois de gravar: o eco é um evento novo, e o CRM o processa sozinho.
     for (const fornecedorId of ecosDeFornecedor) void enviarFornecedorAoCrm(tenantId, fornecedorId);
 
-    return { processado: true, acao };
+    return { processado: true, acao, ...(resposta ? { resposta } : {}) };
   } catch (e) {
     const erro = e instanceof Error ? e.message : 'Erro desconhecido';
     // Marca ERRO: é o que autoriza o reprocessamento na próxima entrega.
@@ -2322,6 +2613,74 @@ export async function disparaEventosPendentes(tenantId: string): Promise<{
   } catch {
     return result;
   }
+}
+
+// ──────────────────────────────────────────
+// enviarEventosDaFila: um tipo de evento da fila de saída
+// --------------------------------------------------------------------
+// O agendador manda por aqui os avisos COMISSAO_PAGA (05/11/2026,
+// comissao-do-crm-servidor.ts): pendentes e falhas com a nova tentativa
+// vencida, só do tipo pedido. Os outros eventos pendentes da conta não
+// saem por aqui; seguem esperando o "Disparar pendentes" da tela.
+// ──────────────────────────────────────────
+
+export async function enviarEventosDaFila(
+  tenantId: string,
+  tipo: string,
+  limite = 50,
+): Promise<{ enviados: number; falhas: number; parado?: string }> {
+  const result: { enviados: number; falhas: number; parado?: string } = { enviados: 0, falhas: 0 };
+  if (!pool || !tenantId || !tipo) return result;
+  const saidaDesligada = nadaSai();
+  if (saidaDesligada) return { ...result, parado: saidaDesligada };
+  await initDB();
+
+  const config = await getCrmConfig(tenantId);
+  if (!config || !config.ativo || !config.webhook_url_crm) return { ...result, parado: config?.recusada || 'integração com o CRM desligada' };
+  if (config.circuit_breaker_status === 'aberto') return { ...result, parado: 'disjuntor da integração aberto' };
+
+  const { rows } = await pool.query(
+    `SELECT id, tipo, tentativas, data FROM crm_eventos_saida
+      WHERE tenant_id = $1 AND tipo = $2 AND status IN ('PENDENTE', 'FALHA')
+        AND (proxima_tentativa IS NULL OR proxima_tentativa <= NOW())
+      ORDER BY created_at ASC, id ASC LIMIT $3`,
+    [tenantId, tipo, limite],
+  );
+  for (const row of rows) {
+    const bodyStr = JSON.stringify(row.data);
+    const carimbo = new Date().toISOString();
+    const start = Date.now();
+    try {
+      const res = await fetch(config.webhook_url_crm, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-entur-event': String(row.tipo),
+          'x-entur-signature': hmacSign(bodyStr, config.api_key_crm || ''),
+          'x-entur-signature-ts': hmacSign(`${carimbo}.${bodyStr}`, config.api_key_crm || ''),
+          'x-entur-event-id': String(row.id),
+          'x-entur-timestamp': carimbo,
+        },
+        body: bodyStr,
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await pool.query(
+        `UPDATE crm_eventos_saida SET status = 'ENVIADO', latencia_ms = $2, updated_at = NOW() WHERE id = $1 AND tenant_id = $3`,
+        [row.id, Date.now() - start, tenantId],
+      );
+      result.enviados++;
+    } catch {
+      const tentativas = (Number(row.tentativas) || 0) + 1;
+      await pool.query(
+        `UPDATE crm_eventos_saida SET status = 'FALHA', tentativas = $2, proxima_tentativa = $3, updated_at = NOW()
+          WHERE id = $1 AND tenant_id = $4`,
+        [row.id, tentativas, calcNextRetry(tentativas).toISOString(), tenantId],
+      );
+      result.falhas++;
+    }
+  }
+  return result;
 }
 
 // ──────────────────────────────────────────
@@ -2598,13 +2957,13 @@ export async function verificarAssinaturaCRM(
   body: string,
   signature: string,
   tenantId: string,
+  carimbo?: string | null,
 ): Promise<boolean> {
   try {
     if (!tenantId || !signature) return false;
     const config = await getCrmConfig(tenantId);
     if (!config || !config.api_key_entur) return false;
-    const expected = hmacSign(body, config.api_key_entur);
-    return expected === signature;
+    return assinaturaCRMConfere(body, signature, config.api_key_entur, carimbo);
   } catch {
     return false;
   }
@@ -2616,17 +2975,175 @@ export async function verificarAssinaturaCRM(
 export async function resolverTenantPorAssinaturaCRM(
   body: string,
   signature: string,
+  carimbo?: string | null,
 ): Promise<string | null> {
   try {
     if (!signature) return null;
     const configs = await listarCrmConfigsAtivas();
     for (const { tenantId, config } of configs) {
       if (!config.api_key_entur) continue;
-      const expected = hmacSign(body, config.api_key_entur);
-      if (expected === signature) return tenantId;
+      if (assinaturaCRMConfere(body, signature, config.api_key_entur, carimbo)) return tenantId;
     }
     return null;
   } catch {
     return null;
   }
+}
+
+// ──────────────────────────────────────────
+// Consultas ao CRM: pergunta assinada, resposta assinada
+// ──────────────────────────────────────────
+
+/**
+ * Pergunta ao CRM pelo mesmo webhook assinado dos eventos e espera a resposta
+ * na hora. É CONSULTA, não evento: não entra em crm_eventos_saida, não tem
+ * retentativa e não mexe no disjuntor. Quem chama decide o que fazer quando o
+ * CRM não responde; nada aqui derruba a tela.
+ *
+ * A resposta vem assinada com o mesmo segredo (x-crm-signature): número que
+ * não dá para provar que veio do CRM não entra em lugar nenhum.
+ *
+ * Cache curto por empresa, tipo e pergunta: as telas perguntam a cada
+ * abertura; o CRM não precisa responder a mesma pergunta dez vezes por minuto.
+ */
+type FalhaDaConsulta = { situacao: 'sem_integracao' | 'crm_sem_suporte' | 'indisponivel' | 'nao_e_a_conta_operadora'; detalhe: string };
+const CACHE_CONSULTAS = new Map<string, { ate: number; valor: unknown }>();
+const VALIDADE_CONSULTA_MS: Record<'ok' | FalhaDaConsulta['situacao'], number> = {
+  ok: 60_000,
+  crm_sem_suporte: 10 * 60_000,
+  nao_e_a_conta_operadora: 10 * 60_000,
+  indisponivel: 30_000,
+  sem_integracao: 0,
+};
+
+function assinaturaConfere(corpo: string, assinatura: string, segredo: string): boolean {
+  if (!assinatura || !segredo) return false;
+  const esperada = Buffer.from(hmacSign(corpo, segredo), 'utf8');
+  const recebida = Buffer.from(assinatura, 'utf8');
+  return esperada.length === recebida.length && timingSafeEqual(esperada, recebida);
+}
+
+async function consultarCrm<T>(
+  tenantId: string,
+  tipo: string,
+  payload: Record<string, unknown>,
+  /** O campo da resposta que traz o resultado (ex.: 'metricas', 'mrr'). */
+  campo: string,
+  ler: (bruto: unknown) => T | null,
+  semSuporte: string,
+  /** Comandos e telas que precisam do estado de agora (unificação do Asaas) não usam o cache. */
+  opcoes: { semCache?: boolean; tempoMs?: number } = {},
+): Promise<{ situacao: 'ok'; valor: T; consultado_em: string } | FalhaDaConsulta> {
+  const chave = `${tenantId}:${tipo}:${JSON.stringify(payload)}`;
+  const guardado = opcoes.semCache ? undefined : CACHE_CONSULTAS.get(chave);
+  if (guardado && guardado.ate > Date.now()) return guardado.valor as { situacao: 'ok'; valor: T; consultado_em: string } | FalhaDaConsulta;
+
+  const resultado = await (async (): Promise<{ situacao: 'ok'; valor: T; consultado_em: string } | FalhaDaConsulta> => {
+    let config: CrmConfig | null = null;
+    try { config = await getCrmConfig(tenantId); } catch { config = null; }
+    if (config?.recusada) return { situacao: 'sem_integracao', detalhe: config.recusada };
+    if (!config || !config.ativo || !config.webhook_url_crm || !config.api_key_crm) {
+      return { situacao: 'sem_integracao', detalhe: 'A integração com o CRM não está ligada nesta empresa (Configurações, CRM Entur).' };
+    }
+    const corpo = JSON.stringify({
+      id: randomUUID(), tipo, timestamp: new Date().toISOString(),
+      versao: 'v1', origem: 'entur-os', payload,
+    });
+    try {
+      const res = await fetch(config.webhook_url_crm, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-entur-event': tipo,
+          'x-entur-signature': hmacSign(corpo, config.api_key_crm),
+        },
+        body: corpo,
+        signal: AbortSignal.timeout(opcoes.tempoMs ?? 6000),
+      });
+      const texto = await res.text();
+      if (res.status === 401) return { situacao: 'indisponivel', detalhe: 'O CRM recusou a assinatura: confira o segredo da integração.' };
+      if (res.status === 403) return { situacao: 'nao_e_a_conta_operadora', detalhe: 'O CRM só responde isto à conta da Entur: a integração desta empresa aponta para outra conta do CRM.' };
+      if (res.status === 404 || res.status === 409 || res.status === 410) {
+        return { situacao: 'sem_integracao', detalhe: 'A integração está desligada ou incompleta no CRM.' };
+      }
+      if (!res.ok) return { situacao: 'indisponivel', detalhe: `O CRM respondeu com erro (HTTP ${res.status}).` };
+      let json: Record<string, unknown> | null = null;
+      try { json = JSON.parse(texto); } catch { json = null; }
+      // CRM que ainda não conhece a consulta responde 200 sem o resultado.
+      if (!json || !(campo in json)) return { situacao: 'crm_sem_suporte', detalhe: semSuporte };
+      if (!assinaturaConfere(texto, res.headers.get('x-crm-signature') ?? '', config.api_key_crm)) {
+        return { situacao: 'indisponivel', detalhe: 'A resposta do CRM veio sem assinatura válida e foi descartada.' };
+      }
+      const valor = ler(json[campo]);
+      if (valor === null) return { situacao: 'indisponivel', detalhe: 'A resposta do CRM não trouxe o que foi pedido.' };
+      return { situacao: 'ok', valor, consultado_em: new Date().toISOString() };
+    } catch (e) {
+      const tempo = e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError');
+      return { situacao: 'indisponivel', detalhe: tempo ? `O CRM demorou mais de ${Math.round((opcoes.tempoMs ?? 6000) / 1000)} segundos para responder.` : 'Não foi possível falar com o CRM agora.' };
+    }
+  })();
+
+  const validade = VALIDADE_CONSULTA_MS[resultado.situacao];
+  if (validade > 0 && !opcoes.semCache) CACHE_CONSULTAS.set(chave, { ate: Date.now() + validade, valor: resultado });
+  return resultado;
+}
+
+/**
+ * Conexão Asaas unificada (E7, 06/11/2026): consulta e comandos ao CRM sobre
+ * o Asaas dele (`ASAAS_CONEXAO`, `ASAAS_UNIFICAR`, `ASAAS_DESUNIFICAR`). Sem
+ * cache: a tela e os comandos precisam do estado de agora. A resposta vem no
+ * campo `asaas`, assinada como as outras consultas.
+ */
+export async function consultarAsaasDoCrm(
+  tenantId: string,
+  tipo: string,
+  payload: Record<string, unknown> = {},
+): Promise<{ situacao: 'ok'; valor: Record<string, unknown>; consultado_em: string } | FalhaDaConsulta> {
+  return consultarCrm(
+    tenantId, tipo, payload, 'asaas',
+    b => (b && typeof b === 'object' && !Array.isArray(b) ? (b as Record<string, unknown>) : null),
+    'O CRM ainda não conhece a conexão Asaas unificada: falta atualizar o CRM.',
+    { semCache: true, tempoMs: 15_000 },
+  );
+}
+
+/**
+ * Assina a resposta a um pedido do CRM com o segredo que o CRM usa para
+ * assinar (o mesmo que acabou de conferir a assinatura do pedido). O CRM
+ * descarta resposta sem assinatura válida.
+ */
+export async function assinarRespostaAoCrm(tenantId: string, corpo: string): Promise<string> {
+  const config = await getCrmConfig(tenantId);
+  const segredo = config?.api_key_entur || config?.api_key_crm || '';
+  return segredo ? hmacSign(corpo, segredo) : '';
+}
+
+/** O endereço do CRM desta empresa (para saber a empresa do CRM: `.../webhook/<empresa>`). */
+export async function enderecoDoCrm(tenantId: string): Promise<string | null> {
+  const config = await getCrmConfig(tenantId);
+  return config?.ativo ? (config.webhook_url_crm || null) : null;
+}
+
+/** Leads e vendas ganhas do mês (acompanhamento do plano), com as contas das Análises do CRM. */
+export async function consultarMetricasComerciais(tenantId: string, mes: string): Promise<ComercialDoCrm> {
+  const r = await consultarCrm(
+    tenantId, TIPO_METRICAS_COMERCIAIS, { mes }, 'metricas', b => lerMetricasDoCrm(b, mes),
+    'O CRM ainda não envia os números comerciais: falta atualizar o CRM.',
+  );
+  if (r.situacao === 'ok') return { situacao: 'ok', metricas: r.valor, consultado_em: r.consultado_em };
+  // As métricas comerciais valem para qualquer conta: 403 aqui é CRM com problema.
+  return { situacao: r.situacao === 'nao_e_a_conta_operadora' ? 'indisponivel' : r.situacao, detalhe: r.detalhe };
+}
+
+/**
+ * O MRR vendido no mês, por vendedor e produto (comissão por MRR da conta da
+ * Entur). O CRM só responde à conta operadora: qualquer outra recebe 403.
+ */
+export async function consultarMrrVendido(tenantId: string, mes: string): Promise<MrrDoCrm> {
+  const r = await consultarCrm(
+    tenantId, TIPO_MRR_VENDIDO, { mes }, 'mrr', b => lerMrrVendido(b, mes),
+    'O CRM ainda não envia o MRR vendido: falta atualizar o CRM.',
+  );
+  if (r.situacao !== 'ok') return r;
+  return { situacao: 'ok', mrr: r.valor, consultado_em: r.consultado_em };
 }

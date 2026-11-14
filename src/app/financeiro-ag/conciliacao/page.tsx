@@ -11,15 +11,17 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { ArrowDownLeft, ArrowUpRight, CheckCircle2, FileSpreadsheet, Landmark, Link2, ListChecks, RotateCcw, TrendingUp, Undo2, Upload } from 'lucide-react';
 
 import type { Cliente, ContaBancaria, ContaPagar, ContaReceber, ExtratoLinha, PlanoContas, StatusConciliacao, VendaCRM } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
-import { mesDe, parseMoneyBR, paraISO, round2 } from '@/lib/money';
+import { mesDe, round2 } from '@/lib/money';
 import { formatBRL, formatDate } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { mesesDoExtrato, painelDoExtrato } from '@/lib/conciliacao-plano';
 import { criarLeitorNdjson } from '@/lib/importacao-progresso';
+import { lerArquivoDeExtrato } from '@/lib/extrato-arquivo';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,75 +39,11 @@ import { rotuloDoMes } from '@/components/fin/SeletorDeMes';
 import { rotuloStatus } from '@/components/fin/StatusChip';
 
 import { GavetaDeConciliacao } from './GavetaDeConciliacao';
+import { FaixaDoExtratoAutomatico } from './FaixaDoExtratoAutomatico';
+import { useExtratoAutomatico } from '../extrato-automatico/useExtratoAutomatico';
 
-// Linha crua vinda do arquivo. `fitid` só existe em OFX — é o identificador
-// da transação no banco e serve de chave de deduplicação na reimportação.
-interface LinhaArquivo {
-  data: string;
-  descricao: string;
-  valor: number;
-  fitid?: string;
-}
-
-function parseCSV(text: string): LinhaArquivo[] {
-  const lines = text.trim().split('\n');
-  if (lines.length < 2) return [];
-
-  const header = lines[0].toLowerCase();
-  // Try to detect columns
-  const cols = header.split(/[;,\t]/);
-  const dateIdx = cols.findIndex(c => c.includes('data') || c.includes('date'));
-  const descIdx = cols.findIndex(c => c.includes('desc') || c.includes('hist') || c.includes('memo'));
-  const valIdx = cols.findIndex(c => c.includes('valor') || c.includes('amount') || c.includes('value'));
-
-  const result: LinhaArquivo[] = [];
-  const sep = header.includes(';') ? ';' : header.includes('\t') ? '\t' : ',';
-
-  for (let i = 1; i < lines.length; i++) {
-    const parts = lines[i].split(sep).map(p => p.replace(/^"|"$/g, '').trim());
-    if (parts.length < 3) continue;
-
-    const rawDate = parts[dateIdx >= 0 ? dateIdx : 0];
-    const desc = parts[descIdx >= 0 ? descIdx : 1];
-    // parseMoneyBR decide qual separador é decimal. Limpar o ponto na mão
-    // transformava 1234.56 em 123456 (valor 100x maior).
-    const valor = parseMoneyBR(parts[valIdx >= 0 ? valIdx : 2]);
-    if (valor === null) continue;
-
-    // Parse date (DD/MM/YYYY or YYYY-MM-DD)
-    let isoDate = rawDate;
-    if (rawDate.includes('/')) {
-      const [d, m, y] = rawDate.split('/');
-      isoDate = `${y.length === 2 ? '20' + y : y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-    }
-
-    result.push({ data: paraISO(isoDate), descricao: desc, valor: round2(valor) });
-  }
-  return result;
-}
-
-function parseOFX(text: string): LinhaArquivo[] {
-  const result: LinhaArquivo[] = [];
-  const transactions = text.split('<STMTTRN>').slice(1);
-
-  for (const tx of transactions) {
-    const getTag = (tag: string) => {
-      const match = tx.match(new RegExp(`<${tag}>([^<\\n]+)`));
-      return match ? match[1].trim() : '';
-    };
-
-    const rawDate = getTag('DTPOSTED');
-    const fitid = getTag('FITID');
-    const desc = getTag('MEMO') || getTag('NAME') || fitid;
-    const valor = parseMoneyBR(getTag('TRNAMT'));
-    if (valor === null || !rawDate) continue;
-
-    const isoDate = `${rawDate.substring(0, 4)}-${rawDate.substring(4, 6)}-${rawDate.substring(6, 8)}`;
-    result.push({ data: isoDate, descricao: desc, valor: round2(valor), ...(fitid ? { fitid } : {}) });
-  }
-  return result;
-}
-
+/** Linha que chegou sozinha pela API do banco (extrato automático). */
+const veioDoBanco = (l: ExtratoLinha) => (l as ExtratoLinha & { origem?: string }).origem === 'SINCRONIZACAO';
 
 /** Lê o arquivo avisando quantos bytes já vieram (a primeira etapa da barra). */
 function lerArquivo(file: File, aoLer: (bytes: number) => void): Promise<string> {
@@ -201,6 +139,8 @@ export default function ConciliacaoPage() {
   const [adiadas, setAdiadas] = useState<Set<string>>(new Set());
   const [desfazendo, setDesfazendo] = useState<ExtratoLinha | null>(null);
   const [confirmando, setConfirmando] = useState(false);
+  // Extrato automático (06/11/2026): quem não vê as contas não vê a faixa.
+  const automatico = useExtratoAutomatico({ silencioso403: true });
   const inputArquivoRef = useRef<HTMLInputElement>(null);
 
   // Silenciosa: depois de conciliar, recarrega sem trocar a tela pelo
@@ -271,8 +211,7 @@ export default function ConciliacaoPage() {
       const text = await lerArquivo(file, bytes => atualizar({ lidoBytes: bytes }));
       atualizar({ fase: 'reconhecendo', lidoBytes: file.size });
       await quadro();
-      const isOFX = file.name.toLowerCase().endsWith('.ofx') || file.name.toLowerCase().endsWith('.qfx');
-      const parsed = isOFX ? parseOFX(text) : parseCSV(text);
+      const parsed = lerArquivoDeExtrato(text, file.name);
       if (parsed.length === 0) {
         atualizar({ fase: 'vazio' });
         return;
@@ -323,6 +262,7 @@ export default function ConciliacaoPage() {
       }
       if (!resultado) throw new ErroDeImportacao('A conexão caiu antes da resposta final.', false);
       atualizar({ fase: 'pronto', feitas: parsed.length, total: parsed.length, resultado });
+      void conciliarComRegras();
     } catch (err) {
       const nadaGravado = err instanceof ErroDeImportacao ? err.nadaGravado : true;
       atualizar({
@@ -331,6 +271,27 @@ export default function ConciliacaoPage() {
       });
     } finally {
       void load(true);
+    }
+  }
+
+  // Depois de importar, as regras que a agência ligou conciliam sozinhas o
+  // que têm certeza (E6). Sem regra ligada, nada acontece. Falha aqui não
+  // estraga a importação: a fila continua como estava.
+  async function conciliarComRegras() {
+    try {
+      const r = await fetch('/api/conciliacao/automatica', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acao: 'executar', conta_bancaria_id: selectedConta }),
+      });
+      if (!r.ok) return;
+      const j = (await r.json().catch(() => null)) as { conciliadas?: unknown[] } | null;
+      const n = j?.conciliadas?.length ?? 0;
+      if (n > 0) {
+        toast.success(n === 1 ? '1 linha conciliada sozinha' : `${n} linhas conciliadas sozinhas`, 'Pelas regras que você ligou. Confira e desfaça em Conciliação automática.');
+        void load(true);
+      }
+    } catch {
+      /* a fila continua igual */
     }
   }
 
@@ -372,6 +333,9 @@ export default function ConciliacaoPage() {
 
   const estadoDados: 'carregando' | 'erro' | 'ok' = loading ? 'carregando' : 'ok';
   const contaSelecionada = contas.find(c => c.id === selectedConta) ?? null;
+  const conexaoDaConta = automatico.dados?.conexoes.find(c => c.conta_bancaria_id === selectedConta && c.status !== 'DESCONECTADA') ?? null;
+  const doBanco = contaExtrato.filter(veioDoBanco);
+  const podeConectarConta = Boolean(automatico.dados?.pode_conectar && automatico.dados.cofre_disponivel && automatico.dados.provedores.length > 0);
   const filtrosAtivos = (filterStatus !== 'TODOS' ? 1 : 0) + (searchTerm.trim() ? 1 : 0) + (periodo ? 1 : 0);
 
   function limparFiltros() {
@@ -497,6 +461,7 @@ export default function ConciliacaoPage() {
           <span className="fin-t-body-strong text-[var(--fin-text)]">{linha.descricao}</span>
           <span className="fin-t-caption text-[var(--fin-text-3)]">
             {linha.tipo === 'CREDITO' ? 'Entrada na conta' : 'Saída da conta'}
+            {veioDoBanco(linha) ? ', chegou sozinha do banco' : ''}
           </span>
         </span>
       ),
@@ -602,6 +567,7 @@ export default function ConciliacaoPage() {
               ? { rotulo: importacao ? 'Importando o arquivo' : 'Importar extrato', icone: Upload, onClick: abrirSeletorDeArquivo }
               : undefined
           }
+          acoesSecundarias={[{ rotulo: 'Conciliação automática', href: '/financeiro-ag/conciliacao/automatica' }]}
           onRecarregar={async () => { await load(); }}
         />
 
@@ -663,6 +629,16 @@ export default function ConciliacaoPage() {
                 ativos={filtrosAtivos}
                 onLimpar={limparFiltros}
               />
+
+              {conexaoDaConta ? (
+                <FaixaDoExtratoAutomatico
+                  conexao={conexaoDaConta}
+                  linhasDoBanco={doBanco.length}
+                  aConferirDoBanco={doBanco.filter(l => A_CONFERIR.has(l.status_conciliacao)).length}
+                  podeLer={Boolean(automatico.dados?.pode_ler)}
+                  onLido={async () => { await Promise.all([load(true), automatico.recarregar()]); }}
+                />
+              ) : null}
 
               {/* O que o banco diz do período */}
               {noPeriodo.length > 0 && (
@@ -802,6 +778,15 @@ export default function ConciliacaoPage() {
                     . Importar o mesmo arquivo duas vezes não duplica lançamentos: o servidor
                     reconhece o que já existe na conta.
                   </p>
+                  {!conexaoDaConta && podeConectarConta ? (
+                    <p className="fin-t-caption max-w-[60ch] text-[var(--fin-text-2)]">
+                      Prefere não baixar arquivo?{' '}
+                      <Link href="/financeiro-ag/extrato-automatico" className="font-medium text-[var(--fin-accent)] underline underline-offset-2">
+                        Conecte esta conta ao banco
+                      </Link>{' '}
+                      e o extrato chega sozinho, todo dia.
+                    </p>
+                  ) : null}
                   <Button type="button" variant="ghost" className={BOTAO_SECUNDARIO} disabled={importacao !== null || !selectedConta} onClick={abrirSeletorDeArquivo}>
                     <Upload aria-hidden="true" className="size-4" />
                     Escolher arquivo

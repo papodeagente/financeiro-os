@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { criarNotificacao } from '@/lib/notificacoes';
 import { processarEventoPropostaPublica } from '@/lib/proposta-aceite-crm';
-import { isHostAuthorizedForProposta } from '@/lib/tenant-host';
+import { resolvePropostaForHost } from '@/lib/tenant-host';
+import { registrarAceite, type Consulta } from '@/lib/proposta-publica';
+import { ipDaRequisicao, permitirChamada } from '@/lib/limite-publico';
 
 // Validacoes server-side (espelham client mas nao confiam nele).
 function validarEmail(s: string): boolean {
@@ -17,15 +19,16 @@ export async function PUT(req: Request, { params }: { params: Promise<{ slug: st
   try {
     await initDB();
     const { slug } = await params;
-    if (!pool || !slug || slug.length < 10 || !/^[\w-]+$/.test(slug)) {
-      return NextResponse.json({ error: 'Bad request' }, { status: 400 });
+    if (!pool) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
+    if (!permitirChamada(`acao:${ipDaRequisicao(req)}`, 20, 10 * 60_000)) {
+      return NextResponse.json({ error: 'Muitas tentativas. Espere alguns minutos.' }, { status: 429 });
     }
 
-    const body = await req.json();
-    const nome = String(body.nome || body.nome_aceite || '').trim();
-    const telefone = String(body.telefone || '').trim();
-    const email = String(body.email || '').trim();
-    const requestId = String(body.request_id || '').trim();
+    const body = await req.json().catch(() => ({}));
+    const nome = String(body?.nome || body?.nome_aceite || '').trim().slice(0, 200);
+    const telefone = String(body?.telefone || '').trim().slice(0, 40);
+    const email = String(body?.email || '').trim().slice(0, 200);
+    const requestId = String(body?.request_id || '').trim().slice(0, 100);
 
     if (!nome) return NextResponse.json({ error: 'Nome obrigatório' }, { status: 400 });
     if (!telefone) return NextResponse.json({ error: 'Telefone obrigatório' }, { status: 400 });
@@ -33,49 +36,46 @@ export async function PUT(req: Request, { params }: { params: Promise<{ slug: st
     if (!validarEmail(email)) return NextResponse.json({ error: 'E-mail inválido' }, { status: 400 });
     if (!validarTelefone(telefone)) return NextResponse.json({ error: 'Telefone inválido (10-15 dígitos)' }, { status: 400 });
 
-    const { rows } = await pool.query(
-      `SELECT id, tenant_id, data FROM propostas WHERE id = $1 LIMIT 1`,
-      [slug]
-    );
-    if (rows.length === 0) return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
+    // Só o host canônico serve proposta pública; endereço inválido, vencido
+    // ou trocado recebe 404, que não vaza sequer a existência da proposta.
+    const r = await resolvePropostaForHost(req, slug);
+    if (!r.ok) return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
+    const tenantId = r.tenantId;
 
-    const proposta = rows[0].data;
-    const tenantId = rows[0].tenant_id || '';
-
-    // Só o host canônico serve proposta pública. Qualquer outro recebe 404,
-    // que não vaza sequer a existência da proposta.
-    if (!isHostAuthorizedForProposta(req)) {
-      return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
-    }
-
-    if (proposta.status === 'RECUSADO') {
+    if (r.data.status === 'RECUSADO') {
       return NextResponse.json({ error: 'Proposta foi recusada' }, { status: 400 });
     }
 
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-      || req.headers.get('x-real-ip')
-      || 'unknown';
-    const baseUrl = req.headers.get('origin') || `https://${req.headers.get('host') || 'fin.enturos.com'}`;
-    const propostaUrl = proposta.link_publico || `${baseUrl}/p/${slug}`;
+    const ip = ipDaRequisicao(req);
+    const propostaUrl = r.linkPublico || String(r.data.link_publico || '');
 
-    // Marca proposta como ACEITO + registra dados do aceite (mesmo se
-    // ja estiver aceita, sobrescreve com dados mais recentes — pode ser
-    // re-aceite com info corrigida).
-    if (proposta.status !== 'ACEITO') {
-      proposta.status = 'ACEITO';
-      proposta.atualizado_em = new Date().toISOString();
-    }
-    proposta.aceite = {
+    // Aceite como troca condicional (FIN2-07): vale o primeiro. Um segundo
+    // aceite não regrava nome, IP e data do primeiro; reenvio do MESMO
+    // pedido (mesmo request_id, ex.: rede caiu na resposta) só refaz o
+    // registro no CRM, que é idempotente.
+    const aceite = {
       nome_aceite: nome,
       data_aceite: new Date().toISOString(),
       ip_aceite: ip,
       telefone,
       email,
+      request_id: requestId,
     };
-    await pool.query(
-      `UPDATE propostas SET data = $1, status = 'ACEITO', updated_at = NOW() WHERE id = $2`,
-      [JSON.stringify(proposta), rows[0].id]
-    );
+    const valeu = await registrarAceite(pool as unknown as Consulta, r.id, aceite);
+    let proposta: Record<string, unknown> = { ...r.data, status: 'ACEITO', aceite };
+    if (!valeu) {
+      const { rows } = await pool.query(`SELECT data FROM propostas WHERE id = $1`, [r.id]);
+      const atual = (rows[0]?.data ?? {}) as Record<string, unknown>;
+      const aceiteAtual = (atual.aceite ?? null) as Record<string, unknown> | null;
+      const mesmoPedido = !!requestId && atual.status === 'ACEITO' && aceiteAtual?.request_id === requestId;
+      if (!mesmoPedido) {
+        return NextResponse.json(
+          { error: atual.status === 'ACEITO' ? 'Esta proposta já foi aceita.' : 'Esta proposta não pode mais ser aceita.' },
+          { status: 409 },
+        );
+      }
+      proposta = atual;
+    }
 
     // ============ PROCESSA EVENTO COM CRM ============
     // Helper unico:
@@ -90,9 +90,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ slug: st
       resultado = await processarEventoPropostaPublica({
         pool,
         tenantId,
-        propostaId: rows[0].id,
+        propostaId: r.id,
         propostaUrl,
-        proposta,
+        proposta: proposta as never,
         nome, telefone, email,
         tipo: 'aceite',
         ip,
@@ -101,8 +101,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ slug: st
     }
 
     if (tenantId && resultado && !resultado.duplicado) {
-      const cliente = proposta.cliente_nome || nome;
-      const numero = proposta.numero || rows[0].id;
+      const cliente = String(proposta.cliente_nome || nome);
+      const numero = String(proposta.numero || r.id);
       const sincronizado = resultado.syncStatus === 'ok';
       const descricao = !sincronizado
         ? 'Aceite registrado com segurança. A sincronização com o CRM ficou pendente e precisa ser reprocessada.'
@@ -116,11 +116,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ slug: st
         descricao,
         link: sincronizado && resultado.vendaId
           ? `/vendas/${resultado.vendaId}`
-          : `/propostas/${rows[0].id}`,
-        vendedorId: proposta.vendedor_id || '',
-        chaveDeduplicacao: `proposta:${rows[0].id}:aceite:${resultado.eventoId}`,
+          : `/propostas/${r.id}`,
+        vendedorId: String(proposta.vendedor_id || ''),
+        chaveDeduplicacao: `proposta:${r.id}:aceite:${resultado.eventoId}`,
         data: {
-          proposta_id: rows[0].id,
+          proposta_id: r.id,
           proposta_numero: numero,
           venda_id: resultado.vendaId,
           venda_numero: resultado.vendaNumero,
@@ -143,6 +143,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ slug: st
       sync_status: resultado?.syncStatus || 'ok',
     });
   } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erro' }, { status: 500 });
+    console.error('[proposta-aceite]', e instanceof Error ? e.message : e);
+    return NextResponse.json({ error: 'Erro ao registrar o aceite' }, { status: 500 });
   }
 }

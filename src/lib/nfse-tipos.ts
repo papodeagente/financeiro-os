@@ -187,10 +187,25 @@ export interface TomadorNota {
     cidade: string;
     estado: string;
   };
+  /**
+   * Tomador do exterior (E7, 06/11/2026): sem CPF/CNPJ, com o documento do
+   * país dele. Os emissores ligados aqui ainda não mandam este tomador; a
+   * nota sai no portal do emissor e é registrada como emitida fora. O código
+   * do país e o tratamento de exportação de serviço: confirmar com o contador.
+   */
+  estrangeiro?: boolean;
+  documento_estrangeiro?: string;
+  pais?: string;
 }
 
 export interface NotaFiscal {
   id: string;
+  /**
+   * A transmissão caiu sem resposta: a nota segue PROCESSANDO (viva, bloqueia
+   * outra emissão da mesma parcela) até a consulta ou o reenvio com o MESMO
+   * id dizerem o que aconteceu (auditoria 04/11/2026, FIN2-09).
+   */
+  resultado_desconhecido?: boolean;
   /** Conta a receber que originou a nota. É a chave anti-duplicata. */
   conta_receber_id: string;
   venda_id: string;
@@ -265,4 +280,60 @@ export interface NotaFiscal {
   cancelada_em: string;
   motivo_cancelamento: string;
   emitida_por: string;
+
+  // ── Nota por regra (05/11/2026, E5) ──
+  // Notas geradas a partir da venda pela regra da nota (nota-regras.ts). A
+  // nota de antes (uma por conta a receber) não tem estes campos.
+  /** 'REGRA' para a nota gerada pela regra; ausente na nota por conta. */
+  origem?: 'REGRA';
+  /** Para quem a nota sai: o pagante, o fornecedor ou o representante. */
+  destino?: 'PAGANTE' | 'FORNECEDOR' | 'REPRESENTANTE';
+  regra_id?: string;
+  /** Chave da geração (venda|destino|tomador|nº): impede a mesma nota duas vezes. */
+  chave_geracao?: string;
+  /** Produtos da venda que a nota cobre, com o valor de cada um, em centavos. */
+  itens?: Array<{ produto_id: string; descricao: string; valor_centavos: number }>;
+  /** Nota complementar: as notas anteriores do mesmo destino. */
+  complementar_de?: string[];
+  /** O que disparou a emissão: a tela ou um gatilho. */
+  gatilho?: string;
+  /** Retenções na fonte (Lei 9.430), em reais. */
+  aliquota_csll?: number;
+  valor_csll_retido?: number;
+  aliquota_pis?: number;
+  valor_pis_retido?: number;
+  aliquota_cofins?: number;
+  valor_cofins_retido?: number;
+  /**
+   * Reforma tributária (IBS/CBS): os campos que a regra informou. Nada é
+   * calculado aqui: as regras do regime de agências de turismo ainda pedem
+   * a confirmação do contador.
+   */
+  ibs_cbs?: {
+    cst: string;
+    classificacao_tributaria: string;
+    indicador_operacao: string;
+    aliquota_ibs: number | null;
+    aliquota_cbs: number | null;
+    situacao: 'CONFIRMAR_COM_O_CONTADOR';
+  };
+
+  // ── E7 (06/11/2026) ──
+  /** Data (competência) da nota, AAAA-MM-DD. Vazia: a da emissão. */
+  data_competencia?: string;
+  /** Nota emitida fora do sistema (no portal da prefeitura ou em outro sistema) e só registrada aqui. */
+  emitida_fora?: boolean;
+  /** Chave da nota de fora: prestador|série|número. Impede registrar a mesma duas vezes. */
+  chave_externa?: string;
+  /** De onde veio o registro da nota de fora: a tela ou a mudança de sistema. */
+  registro_origem?: 'TELA' | 'MUDANCA';
+  /** Acompanhamento sozinho da nota que ficou na prefeitura (nota-acompanhamento.ts). */
+  acompanhamento?: {
+    tentativas: number;
+    /** ISO: quando consultar de novo. */
+    proxima_em: string;
+    ultima_em: string;
+    /** O aviso de recusa já foi para o sino. */
+    avisada_recusa?: boolean;
+  };
 }

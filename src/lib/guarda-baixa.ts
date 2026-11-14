@@ -63,3 +63,17 @@ export function preservarCamposDerivados(
   }
   return enviado;
 }
+
+/**
+ * Expressão SQL que grava `novo` (jsonb) mantendo os campos derivados que já
+ * estão na linha. Vai dentro do próprio UPDATE/upsert: decidir em SQL é o que
+ * impede uma baixa concorrente de ser apagada entre a leitura e a escrita.
+ * Linha sem o campo (cadastro novo, tabela sem saldo) fica com o enviado.
+ */
+export function sqlPreservarDerivados(tabela: string, novo: string): string {
+  let expr = novo;
+  for (const campo of CAMPOS_DERIVADOS) {
+    expr = `(CASE WHEN ${tabela}.data ? '${campo}' THEN jsonb_set(${expr}, '{${campo}}', ${tabela}.data->'${campo}', true) ELSE ${expr} END)`;
+  }
+  return expr;
+}

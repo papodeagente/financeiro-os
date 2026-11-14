@@ -20,6 +20,7 @@ import { NegociacaoAtividade } from '@/components/vendas/NegociacaoAtividade';
 import { EscolhaDoRecebimento } from '@/components/vendas/EscolhaDoRecebimento';
 import { precisaEscolherRecebimento, type RecebimentoDaVenda } from '@/lib/recebimento-parcelado';
 import { vendaTemRecibo } from '@/lib/recibo-da-venda';
+import { useModulos } from '@/components/useModulos';
 
 const fmt = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -68,6 +69,7 @@ const FORMAS_PAGAMENTO_LABEL: Record<string, string> = {
 
 export default function VendaDetalhe() {
   const router = useRouter();
+  const modulos = useModulos();
   const { id } = useParams<{ id: string }>();
   const [venda, setVenda] = useState<VendaCRM | null>(null);
   const [cliente, setCliente] = useState<Cliente | null>(null);
@@ -176,6 +178,12 @@ export default function VendaDetalhe() {
             >
               <Copy className="w-3.5 h-3.5" /> Copiar numero
             </Button>
+            {/* Ficha da venda completa (E5), só com o módulo de venda (modulos.ts). */}
+            {modulos.tem('venda') ? (
+              <Button className="text-xs" onClick={() => router.push(`/vendas/${encodeURIComponent(venda.id)}/ficha`)}>
+                Ficha da venda
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>

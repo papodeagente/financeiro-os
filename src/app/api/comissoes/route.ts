@@ -7,5 +7,7 @@ import type { ComissaoVenda } from '@/lib/crm-types';
  * data da agenda de pagamento. Ver src/lib/comissao-conta.ts.
  */
 export const { GET, POST } = createCrudHandlers('comissoes', ['venda_id', 'vendedor_id', 'status'], {
+  escritaFinanceira: true,
+  colunaDoVendedor: 'vendedor_id',
   aposGravar: (tenantId, item) => sincronizarContaDaComissao(tenantId, item as unknown as ComissaoVenda).then(() => undefined),
 });

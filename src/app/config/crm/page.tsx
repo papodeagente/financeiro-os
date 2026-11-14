@@ -10,6 +10,8 @@ interface CrmConfig {
   ativo: boolean;
   webhook_url_entur: string;
   webhook_url_crm: string;
+  /** Só na conta do ecossistema: a única conta do CRM com que ela pode se integrar. */
+  regra_do_ecossistema?: { conta: number; url: string; recusada: string | null } | null;
   api_key_entur: string;
   api_key_crm: string;
   retry_max: number;
@@ -64,6 +66,7 @@ export default function CrmConfigPage() {
   const [status, setStatus] = useState<CrmStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [erroAoSalvar, setErroAoSalvar] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ sucesso: boolean; latencia_ms?: number; erro?: string } | null>(null);
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [direcao, setDirecao] = useState<'saida' | 'entrada'>('saida');
@@ -109,14 +112,23 @@ export default function CrmConfigPage() {
         payload.api_key_crm = hmacInput.trim();
         payload.api_key_entur = hmacInput.trim();
       }
-      await fetch('/api/v1/crm/config', {
+      setErroAoSalvar(null);
+      const res = await fetch('/api/v1/crm/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+      if (!res.ok) {
+        const corpo = await res.json().catch(() => null);
+        setErroAoSalvar(corpo?.error || 'Não foi possível salvar a configuração.');
+        setSaving(false);
+        return;
+      }
       await loadAll();
       setHmacInput('');
-    } catch { /* silent */ }
+    } catch {
+      setErroAoSalvar('Não foi possível salvar a configuração.');
+    }
     setSaving(false);
   };
 
@@ -485,6 +497,25 @@ export default function CrmConfigPage() {
             <p className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] mt-1">
               Pegue do CRM. Tipicamente <span className="font-mono">https://stagingcrm.enturos.com/api/integracao-financeiro/webhook/&lt;tenantId-no-CRM&gt;</span>.
             </p>
+            {config.regra_do_ecossistema ? (
+              <div className={`mt-2 rounded-lg px-3 py-2 text-[length:var(--text-caption)] ${config.regra_do_ecossistema.recusada ? 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)]' : 'bg-[var(--fin-surface-sunken)] text-[var(--fin-text-2)]'}`}>
+                <p>
+                  {config.regra_do_ecossistema.recusada
+                    ? `Integração recusada: ${config.regra_do_ecossistema.recusada}`
+                    : `Este é o financeiro da Entur: ele só se integra com a conta ${config.regra_do_ecossistema.conta} do CRM.`}
+                </p>
+                {config.webhook_url_crm !== config.regra_do_ecossistema.url ? (
+                  <button
+                    type="button"
+                    onClick={() => setConfig({ ...config, webhook_url_crm: config.regra_do_ecossistema!.url })}
+                    className="mt-1 font-medium text-[var(--fin-accent)] hover:underline"
+                  >
+                    Usar a conta {config.regra_do_ecossistema.conta} ({config.regra_do_ecossistema.url})
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+            {erroAoSalvar ? <p role="alert" className="mt-2 text-[length:var(--text-caption)] text-[var(--fin-negative-text)]">{erroAoSalvar}</p> : null}
           </div>
 
           <div className="grid grid-cols-2 gap-4">

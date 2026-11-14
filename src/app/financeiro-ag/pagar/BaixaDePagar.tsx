@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 import type { ContaPagar } from '@/lib/crm-types';
 import type { Anexo } from '@/components/fin/AnexoComprovante';
-import { updateEntity } from '@/lib/crm-storage';
+import { AguardandoAprovacao, useLiquidacao } from '@/components/fin/useLiquidacao';
 import { hojeISO, num, round2 } from '@/lib/money';
 import { toast } from '@/lib/toast';
 import { formatBRL } from '@/lib/utils';
@@ -41,42 +41,32 @@ export function BaixaDePagar({ conta, onFechar, onRegistrada }: BaixaDePagarProp
     setForm(conta ? { dataPagamento: hojeISO(), valorPago: saldoDevedor(conta), observacao: '', anexos: [] } : null);
   }
 
+  const liquidacao = useLiquidacao(
+    'contas_pagar', (conta as unknown as (Record<string, unknown> & { id: string }) | null), round2(num(form?.valorPago)), 0,
+    v => setForm(f => (f ? { ...f, valorPago: v } : f)),
+  );
+
   async function confirmar() {
     if (!conta || !form || pagando) return;
     const pagoAgora = round2(num(form.valorPago));
     if (pagoAgora <= 0) { toast.error('Valor pago deve ser maior que zero'); return; }
-
-    const devido = valorBRLDaConta(conta);
-    // Baixa parcial ACUMULA sobre o que já foi pago antes, nunca substitui,
-    // senão o restante da dívida some do sistema.
-    const acumulado = round2(num(conta.valor_pago) + pagoAgora);
-    const restante = round2(devido - acumulado);
-    const quitado = restante <= 0.005;
-
     setPagando(true);
     try {
-      // Acumula: baixa parcial pode ter comprovante em cada parcela, e o
-      // anexo de uma não pode apagar o da outra.
-      const anexosFinais = [...(conta.anexos ?? []), ...form.anexos];
-      const atualizada: ContaPagar = {
-        ...conta,
-        status: quitado ? 'PAGO' : 'PARCIAL',
-        data_pagamento: form.dataPagamento,
-        valor_pago: acumulado,
-        observacoes: form.observacao ? `${conta.observacoes ? conta.observacoes + ' · ' : ''}${form.observacao}` : conta.observacoes,
-        anexos: anexosFinais,
-        // `comprovante` guarda o mais recente, para quem lê um campo só.
-        comprovante: form.anexos.length > 0 ? form.anexos[form.anexos.length - 1].url : conta.comprovante,
-      };
-      await updateEntity('contas-pagar', atualizada);
-      if (quitado) {
+      // Gravado no servidor (05/11/2026): data, conta, encargos, histórico e
+      // a mesma regra de parcial de sempre. Comprovantes somam aos anteriores.
+      const plano = await liquidacao.gravar({
+        observacao: form.observacao || undefined,
+        anexos: form.anexos.length ? (form.anexos as unknown as Array<Record<string, unknown>>) : undefined,
+      });
+      if (plano.status_depois === 'PAGO') {
         toast.success('Pagamento confirmado', `${conta.fornecedor_nome} · ${formatBRL(pagoAgora)}`);
       } else {
-        toast.success('Pagamento em parte registrado', `${conta.fornecedor_nome} · pago ${formatBRL(pagoAgora)} · saldo ${formatBRL(restante)}`);
+        toast.success('Pagamento em parte registrado', `${conta.fornecedor_nome} · pago ${formatBRL(pagoAgora)} · saldo ${formatBRL(plano.saldo_depois)}`);
       }
       onFechar();
       onRegistrada?.();
     } catch (e) {
+      if (e instanceof AguardandoAprovacao) return;
       toast.error('Não foi possível registrar o pagamento.', e instanceof Error ? e.message : '');
     } finally {
       setPagando(false);
@@ -103,6 +93,7 @@ export function BaixaDePagar({ conta, onFechar, onRegistrada }: BaixaDePagarProp
       pagando={pagando}
       onFechar={onFechar}
       onConfirmar={() => { void confirmar(); }}
+      liquidacao={liquidacao.bloco}
     />
   );
 }

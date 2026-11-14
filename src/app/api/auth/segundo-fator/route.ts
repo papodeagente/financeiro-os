@@ -4,17 +4,20 @@ import { createSession, getSession, duracaoDaSessao, COOKIE_NAME, type SessionPa
 import { COOKIE_NAVEGADOR, opcoesDoCookieDoNavegador, seloDepoisDoCodigo } from '@/lib/navegador-confiavel';
 import { registrarEventoAuditoria } from '@/lib/audit';
 import { etapaSegundoFator, exigeSegundoFator, segredoGravado, type Consulta } from '@/lib/segundo-fator';
+import { regraDoPagador } from '@/lib/segundo-fator-pagador';
+import { pode } from '@/lib/permissoes-servidor';
 import { bloqueioDeLogin, ipDoLogin, registrarFalhaDeLogin, registrarSucessoDeLogin } from '@/lib/limite-login';
 
 /**
  * Verificação em duas etapas da própria pessoa, já logada (E7, 06/11/2026).
  *
- *   GET  → { ativo, verificada_nesta_sessao, administrador }
+ *   GET  → { ativo, exigido_para_pagar, verificada_nesta_sessao, prazo, administrador }
  *   POST {}                          → começa o cadastro: { segredo, uri } (nada gravado)
  *   POST { segredo_novo, codigo }    → cadastra (o código prova o aplicativo)
  *   POST { codigo }                  → quem já cadastrou confirma nesta sessão
  *
- * Cadastrou ou confirmou: a sessão é trocada por uma com `sf: true` . O segredo nunca vai para o registro
+ * Cadastrou ou confirmou: a sessão é trocada por uma com `sf: true` (o
+ * pagamento segue sem sair do sistema). O segredo nunca vai para o registro
  * de atividades. Erros de código contam no mesmo limite do login.
  */
 export const dynamic = 'force-dynamic';
@@ -29,16 +32,23 @@ async function lerCadastro(sessao: Sessao): Promise<Record<string, unknown> | nu
   return (rows[0]?.data ?? null) as Record<string, unknown> | null;
 }
 
+async function pagaNoFinanceiro(sessao: Sessao): Promise<boolean> {
+  return (await pode(sessao, 'liquidar_pagar')) || (await pode(sessao, 'transferir')) || (await pode(sessao, 'aprovar_pagamento'));
+}
+
 export async function GET() {
   const sessao = (await getSession()) as Sessao | null;
   if (!sessao?.userId) return NextResponse.json({ error: 'Sessao necessaria' }, { status: 401 });
   await initDB();
   const administrador = !!sessao.isSuperAdmin || exigeSegundoFator(sessao.perfil);
   const cadastro = sessao.isSuperAdmin ? null : await lerCadastro(sessao);
+  const regra = regraDoPagador();
   return NextResponse.json({
     ativo: administrador || (cadastro ? segredoGravado(cadastro) !== null : false),
     administrador,
+    exigido_para_pagar: !administrador && regra.ligado && (await pagaNoFinanceiro(sessao)),
     verificada_nesta_sessao: administrador || sessao.sf === true,
+    prazo: regra.prazo,
   }, { headers: { 'Cache-Control': 'no-store' } });
 }
 

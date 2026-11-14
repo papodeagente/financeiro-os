@@ -20,6 +20,8 @@ export type DetalheDaLinhaProps = {
   ano: string;
   hoje: string;
   onFechar: () => void;
+  /** De onde é a linha (ex.: o nome da conta, na grade por conta e dia). */
+  contexto?: string | null;
 };
 
 type Filtro = 'tudo' | 'entrada' | 'saida';
@@ -94,7 +96,7 @@ function LinhaDeLancamento({ l }: { l: Lancamento }) {
  * previsto). Em semana e mês, cada dia ganha um subtítulo, como as folhas de
  * um caderno de verdade.
  */
-export function DetalheDaLinha({ linha, agrupamento, ano, hoje, onFechar }: DetalheDaLinhaProps) {
+export function DetalheDaLinha({ linha, agrupamento, ano, hoje, onFechar, contexto = null }: DetalheDaLinhaProps) {
   const [filtro, setFiltro] = useState<Filtro>('tudo');
   const [linhaAnterior, setLinhaAnterior] = useState<string | null>(null);
   // Linha nova abre sempre em "Tudo": ajuste na renderização, sem efeito.
@@ -134,7 +136,7 @@ export function DetalheDaLinha({ linha, agrupamento, ano, hoje, onFechar }: Deta
         {linha ? (
           <>
             <div className="flex flex-col gap-1 px-[var(--fin-s-5)] pb-[var(--fin-s-4)] pt-[var(--fin-s-5)] pr-12">
-              <span className="fin-t-caption font-medium text-[var(--fin-text-3)]">{quando}</span>
+              <span className="fin-t-caption font-medium text-[var(--fin-text-3)]">{contexto ? `${quando} · ${contexto}` : quando}</span>
               <DialogTitle className="fin-t-title text-[var(--fin-text)]">{titulo}</DialogTitle>
               <DialogDescription className="fin-t-body text-[var(--fin-text-2)]">
                 {lancamentos.length} {lancamentos.length === 1 ? 'lançamento' : 'lançamentos'}{' '}

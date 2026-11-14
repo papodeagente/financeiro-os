@@ -1,3 +1,4 @@
+import { recusaAdmin, rotaDeTesteDesligada } from '@/lib/guarda-rota';
 import { NextResponse } from 'next/server';
 import { resetarDadosVendas } from '@/lib/crm-integration';
 import { getTenantId } from '@/lib/tenant';
@@ -8,6 +9,10 @@ import { getTenantId } from '@/lib/tenant';
 // Exige header x-confirm-reset: SIM para evitar acidente.
 export async function POST(req: Request) {
   try {
+    const desligada = rotaDeTesteDesligada();
+    if (desligada) return desligada;
+    const recusa = await recusaAdmin();
+    if (recusa) return recusa;
     const confirm = req.headers.get('x-confirm-reset');
     if (confirm !== 'SIM') {
       return NextResponse.json(

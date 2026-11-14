@@ -20,8 +20,10 @@ import { DataState } from '@/components/fin/DataState';
 import { FinTable, type FinColuna } from '@/components/fin/FinTable';
 import { MetricCard } from '@/components/fin/MetricCard';
 import { Money } from '@/components/fin/Money';
+import { HistoricoRecolhivel } from '@/components/fin/HistoricoDoRegistro';
 import { Resposta } from '@/components/fin/Resposta';
 import { secoesDaFicha, type SecaoDaFicha } from '@/lib/ficha-do-cliente';
+import { TaxaDeBoletoDoCliente } from '@/components/financeiro/cobranca/TaxaDeBoletoDoCliente';
 
 interface Linha { id: string; status: string; [k: string]: unknown }
 
@@ -343,6 +345,7 @@ export default function PerfilDoClientePage({ params }: { params: Promise<{ id: 
                   />
                 ) : null}
               </div>
+              <TaxaDeBoletoDoCliente clienteId={id} />
             </Secao>
 
             <Secao
@@ -398,6 +401,9 @@ export default function PerfilDoClientePage({ params }: { params: Promise<{ id: 
                 }}
               />
             </Secao>
+
+            {/* Quem mudou o cadastro, quando, antes → depois (06/11/2026). */}
+            <HistoricoRecolhivel entidade="clientes" id={id} />
           </>
         ) : null}
       </DataState>

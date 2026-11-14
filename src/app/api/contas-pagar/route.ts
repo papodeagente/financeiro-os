@@ -1,9 +1,23 @@
 import { createCrudHandlers } from '@/lib/crud-api';
+import { conferirTituloNoServidor, validarCadastroDoTitulo } from '@/lib/rota-do-titulo';
 
 // protegerBaixa: criar direto como PAGO deixaria o saldo sem o débito e o
 // estorno da exclusão CRIARIA dinheiro. Baixa é operação do PUT.
 export const { GET, POST } = createCrudHandlers(
   'contas_pagar',
   ['fornecedor_id', 'status'],
-  { protegerBaixa: true },
+  {
+    somenteFinanceiro: true, protegerBaixa: true, validarCadastro: validarCadastroDoTitulo('contas_pagar'),
+    // Moeda do catálogo da agência e campos obrigatórios da empresa (E7, frente D).
+    conferirNoServidor: conferirTituloNoServidor('contas_pagar'),
+    // Aviso de edição simultânea (06/11/2026): cada conta lida leva `_versao`.
+    versao: true,
+    // Pago numa conta não liberada para a pessoa: some da lista (05/11/2026).
+    filtroDeConta: { campos: ['conta_bancaria_id'], soBaixados: true },
+    // Lançar numa conta que a pessoa só vê é recusado (E7).
+    contasDaGravacao: { campos: ['conta_bancaria_id'] },
+    // Várias empresas (E7): só as empresas marcadas e liberadas; rateio entre
+    // empresas aparece em cada empresa que ele toca.
+    filtroDeEmpresa: { tipo: 'registro' },
+  },
 );

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { urlHttp } from '@/lib/html-seguro';
 import type { AlojamentoData } from '@/lib/crm-types';
 import { t, type IdiomaProposal } from '@/lib/i18n-proposta';
 
@@ -239,9 +240,9 @@ export function HotelModal({ alojamento: a, idioma, corPrimaria, onClose }: Prop
           )}
 
           {/* Link */}
-          {a.hotel_link && (
+          {urlHttp(a.hotel_link) && (
             <a
-              href={a.hotel_link}
+              href={urlHttp(a.hotel_link)}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors"

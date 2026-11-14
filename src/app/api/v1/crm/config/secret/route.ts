@@ -1,3 +1,5 @@
+import { recusaAdmin } from '@/lib/guarda-rota';
+import { abrirCrmConfig } from '@/lib/crm-config-cofre';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
@@ -8,6 +10,8 @@ import { registrarEventoAuditoria } from '@/lib/audit';
 // reveal action is a deliberate, auditable click.
 export async function GET() {
   try {
+    const recusa = await recusaAdmin();
+    if (recusa) return recusa;
     if (!pool) return NextResponse.json({ secret: '' });
     await initDB();
     const tenantId = await getTenantId();
@@ -16,7 +20,7 @@ export async function GET() {
       [tenantId],
     );
     if (rows.length === 0) return NextResponse.json({ secret: '' });
-    const data = rows[0].data;
+    const data = abrirCrmConfig(rows[0].data);
     await registrarEventoAuditoria({
       tenantId,
       acao: 'VISUALIZAR',

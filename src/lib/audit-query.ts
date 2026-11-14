@@ -52,6 +52,13 @@ export function buildAuditFilter(params: URLSearchParams, tenantId: string) {
       acao, entidade, entidade_id, data->>'entidade_nome', data->>'request_id',
       data->>'rota', data->>'alteracoes') ILIKE $${values.length}`);
   }
+  // Registro de atividades (05/11/2026): "Pessoa" = cliente/fornecedor do registro.
+  const pessoa = params.get('pessoa')?.trim();
+  if (pessoa) {
+    if (pessoa.length > 200) throw new AuditFilterError('O nome da pessoa deve ter até 200 caracteres.');
+    values.push(`%${pessoa.replace(/[\\%_]/g, '\\$&')}%`);
+    clauses.push(`concat_ws(' ', data->>'entidade_nome', data->>'descricao') ILIKE $${values.length}`);
+  }
   return { where: clauses.join(' AND '), values, page, pageSize };
 }
 

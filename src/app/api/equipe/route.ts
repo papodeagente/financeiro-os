@@ -1,3 +1,4 @@
+import { recusaFinanceira } from '@/lib/guarda-rota';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
@@ -138,6 +139,10 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    // Plano de comissão e meta definem quanto a pessoa recebe: gravar exige
+    // quem edita o financeiro. Sem isto, um vendedor fixava o próprio plano.
+    const recusa = await recusaFinanceira('escrever');
+    if (recusa) return recusa;
     await initDB();
     if (!pool) return NextResponse.json({ error: 'No database' }, { status: 500 });
     const tenantId = await getTenantId();

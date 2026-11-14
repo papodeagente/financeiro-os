@@ -1,0 +1,89 @@
+/**
+ * Tarefas do agendador (05/11/2026). Cada entrega acrescenta as suas aqui.
+ */
+import pool, { initDB } from '../db';
+import { emTransacao, type ExecutorSQL } from '../caixa-atomico';
+import { abrirRazaoNoExecutor, conferirRazaoNoExecutor } from '../razao-servidor';
+import { processarFila, registrarProcessador } from './fila';
+import { tarefaRecorrenciaGerar } from '../recorrencia-servidor';
+import { tarefaAvisosVencimento } from '../avisos-vencimento-servidor';
+// Importar a régua também registra os processadores da fila de emissão
+// e de atualização das cobranças.
+import { tarefaReguaCobranca } from '../cobranca/regua';
+import { tarefaCotacoes } from '../cambio-servidor';
+import { tarefaFaturasFornecedor } from '../fornecedor-tarefa';
+import { tarefaComissoesDoDia } from '../comissao-funcoes-servidor';
+import { tarefaCreditosEReembolsos } from '../creditos-e-reembolsos-tarefa';
+import { tarefaMontarFaturas } from '../fatura-tarefa';
+import { TAREFA_NOTA_POR_GATILHO, processarNotaPorGatilho, tarefaNotasPorGatilho } from '../nota-regras-servidor';
+import { tarefaExtratoAutomatico } from '../extrato-automatico/servidor';
+import { tarefaAcompanharNotas } from '../nota-acompanhamento';
+import { tarefaRelatoriosAgendados } from '../relatorios-agendados/servidor';
+import { tarefaLiquidarAutomaticamente } from '../venda-liquidar-auto';
+import { TIPO_TAREFA_MIGRACAO, processarTarefaMigracao } from '../migracao/servidor';
+import { tarefaComissaoPagaAoCrm } from '../comissao-do-crm-servidor';
+import { janelaDeMinutos, janelaDiaria, rodarAgendador, type DefinicaoTarefa, type ResumoAgendador } from './nucleo';
+
+// A aplicação da mudança de sistema roda em blocos pela fila.
+registrarProcessador(TIPO_TAREFA_MIGRACAO, processarTarefaMigracao);
+// Notas emitidas por gatilho (ao receber, ao fechar fatura, ao receber a comissão).
+registrarProcessador(TAREFA_NOTA_POR_GATILHO, processarNotaPorGatilho);
+
+/** Abre o razão das agências que ainda não têm (até 20 por chamada). */
+export const tarefaRazaoAbertura: DefinicaoTarefa = {
+  nome: 'razao-abertura',
+  janela: janelaDeMinutos(5),
+  agencias: async ({ exec }) => {
+    const { rows } = await exec.query(
+      `SELECT DISTINCT c.tenant_id FROM contas_bancarias c
+        WHERE c.tenant_id <> '' AND NOT EXISTS (SELECT 1 FROM razao_estado e WHERE e.tenant_id = c.tenant_id)
+        ORDER BY c.tenant_id LIMIT 20`,
+    );
+    return rows.map(r => String(r.tenant_id));
+  },
+  executar: async ({ emTransacao: tx }, tenantId) => {
+    const r = await tx(exec => abrirRazaoNoExecutor(exec, tenantId));
+    return { contas: r.contas, diferencas_para_revisar: r.diferencas.length };
+  },
+};
+
+/** Conferência diária razão × saldo, a partir das 3h de Brasília. */
+export const tarefaRazaoConferencia: DefinicaoTarefa = {
+  nome: 'razao-conferencia',
+  janela: janelaDiaria(3),
+  agencias: async ({ exec }) => {
+    const { rows } = await exec.query(`SELECT tenant_id FROM razao_estado ORDER BY tenant_id`);
+    return rows.map(r => String(r.tenant_id));
+  },
+  executar: async ({ exec }, tenantId) => {
+    const r = await conferirRazaoNoExecutor(exec, tenantId);
+    const comDiferenca = r.linhas.filter(l => l.diferenca !== 0).length;
+    return { contas: r.linhas.length, com_diferenca: comDiferenca, falhas_recentes: r.falhas_recentes };
+  },
+};
+
+/** Fila de tarefas por agência (cobrança, régua, importações). */
+export const tarefaFila: DefinicaoTarefa = {
+  nome: 'fila',
+  janela: janelaDeMinutos(1),
+  executar: async ({ exec, restanteMs }) => processarFila(exec, { orcamentoMs: Math.min(30_000, restanteMs()) }),
+};
+
+export const TAREFAS: DefinicaoTarefa[] = [tarefaRazaoAbertura, tarefaRazaoConferencia, tarefaRecorrenciaGerar, tarefaAvisosVencimento, tarefaReguaCobranca, tarefaCotacoes, tarefaFaturasFornecedor, tarefaNotasPorGatilho, tarefaComissoesDoDia, tarefaCreditosEReembolsos, tarefaMontarFaturas, tarefaExtratoAutomatico, tarefaAcompanharNotas, tarefaRelatoriosAgendados, tarefaLiquidarAutomaticamente, tarefaFila];
+// Avisos de comissão do CRM paga (comissao-do-crm-servidor.ts), só nas contas do ecossistema.
+TAREFAS.push(tarefaComissaoPagaAoCrm);
+
+/** Roda o agendador contra o banco de verdade. */
+export async function executarAgendadorAgora(): Promise<ResumoAgendador> {
+  await initDB();
+  if (!pool) throw new Error('Banco indisponível');
+  const p = pool;
+  return rodarAgendador({
+    tarefas: TAREFAS,
+    conexao: async () => {
+      const client = await p.connect();
+      return { exec: client as unknown as ExecutorSQL, liberar: () => client.release() };
+    },
+    emTransacao,
+  });
+}

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useActivePillar, PILLARS as PILARES_DO_MENU, type Pillar } from '@/hooks/useActivePillar';
+import { useAuth } from '@/contexts/AuthContext';
 
 /** Mesma tabela da barra de cima: a gaveta e o topo abrem a mesma porta. */
 const ROTA_DO_PILAR: Record<Pillar, string> = {
@@ -24,7 +25,7 @@ import {
   PanelLeftClose, PanelLeftOpen,
   Eraser, LifeBuoy, FileText,
   LayoutGrid, ChartColumn, ArrowDownLeft, ArrowUpRight, GitCompareArrows, ListTree,
-  Contact, Truck,
+  MessageCircleQuestion, Contact, Truck, Repeat, Lock, ArrowDownUp, Barcode, FolderInput, Coins, FileStack, HandCoins, Handshake, BadgePercent, FilePlus2, FileCog, ReceiptText, Users2, Grid3x3, CalendarCheck, Banknote, UserRound, BarChart3, Undo2, PiggyBank, FileText as FileTextIcon, CalendarRange, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2, ClipboardCheck, RefreshCw,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -34,6 +35,8 @@ export interface SidebarItem {
   label: string;
   icon: ComponentType<{ className?: string }>;
   href: string;
+  /** Só na conta do ecossistema (perfil-da-conta.ts). Esconder aqui é só a tela: a rota barra no servidor. */
+  soEcossistema?: boolean;
 }
 
 export interface SidebarSection {
@@ -63,9 +66,18 @@ const METAS_MENU: SidebarSection[] = [
     title: 'Equipe',
     items: [
       { key: 'comissoes', label: 'Comissões', icon: Percent, href: '/equipe/comissoes' },
+      { key: 'comissao-mrr', label: 'Comissão por MRR', icon: Repeat, href: '/equipe/mrr', soEcossistema: true },
       { key: 'vendedores', label: 'Vendedores e planos', icon: UserCheck, href: '/equipe/vendedores' },
       { key: 'folha', label: 'Folha', icon: Wallet2, href: '/equipe/folha' },
       { key: 'planos-comissao', label: 'Planos de comissão', icon: Settings, href: '/equipe/planos-comissao' },
+      { key: 'funcoes', label: 'Funções', icon: Users2, href: '/equipe/funcoes' },
+      { key: 'planos-por-funcao', label: 'Planos por função', icon: Grid3x3, href: '/equipe/planos-por-funcao' },
+      { key: 'metas-por-funcao', label: 'Grade de metas', icon: Table2, href: '/equipe/metas-por-funcao' },
+      { key: 'fechar-comissoes', label: 'Fechar comissões', icon: CalendarCheck, href: '/equipe/fechar-comissoes' },
+      { key: 'pagar-comissoes', label: 'Pagar comissões', icon: Banknote, href: '/equipe/pagar-comissoes' },
+      { key: 'minhas-comissoes', label: 'Minhas comissões', icon: UserRound, href: '/equipe/minhas-comissoes' },
+      { key: 'relatorios-vendas', label: 'Relatórios de vendas', icon: BarChart3, href: '/relatorios/vendas' },
+      { key: 'relatorios-envios', label: 'Envios agendados', icon: CalendarRange, href: '/relatorios/envios' },
     ],
   },
 ];
@@ -82,18 +94,45 @@ const FINANCEIRO_MENU: SidebarSection[] = [
     title: 'Visão geral',
     items: [
       { key: 'fin-hub', label: 'Visão geral', icon: LayoutGrid, href: '/financeiro-ag' },
+      { key: 'fin-perguntar', label: 'Perguntar', icon: MessageCircleQuestion, href: '/financeiro-ag/perguntar' },
       { key: 'fluxo-caixa', label: 'Fluxo de caixa', icon: ChartColumn, href: '/financeiro-ag/fluxo-caixa' },
       { key: 'dre', label: 'Resultado do mês', icon: FileText, href: '/financeiro-ag/dre' },
+      { key: 'resultado-por-categoria', label: 'Resultado por categoria', icon: Table2, href: '/financeiro-ag/resultado-por-categoria' },
     ],
   },
   {
     title: 'Dia a dia',
     items: [
+      { key: 'contas', label: 'Contas a Pagar/Receber', icon: ArrowDownUp, href: '/financeiro-ag/contas' },
       { key: 'receber', label: 'Contas a receber', icon: ArrowDownLeft, href: '/financeiro-ag/receber' },
       { key: 'pagar', label: 'Contas a pagar', icon: ArrowUpRight, href: '/financeiro-ag/pagar' },
+      { key: 'cobrancas', label: 'Cobranças', icon: Barcode, href: '/financeiro-ag/cobrancas' },
+      { key: 'faturas', label: 'Faturas', icon: FileTextIcon, href: '/financeiro-ag/faturas' },
+      { key: 'regras-faturamento', label: 'Regras de faturamento', icon: CalendarRange, href: '/financeiro-ag/regras-faturamento' },
       { key: 'conciliacao', label: 'Conciliação', icon: GitCompareArrows, href: '/financeiro-ag/conciliacao' },
+      { key: 'extrato-automatico', label: 'Extrato automático', icon: RefreshCw, href: '/financeiro-ag/extrato-automatico' },
+      { key: 'conferencia-operadora', label: 'Conferência de operadora', icon: ClipboardCheck, href: '/financeiro-ag/conferencia-operadora' },
       { key: 'notas-fiscais', label: 'Notas fiscais', icon: Receipt, href: '/financeiro-ag/notas' },
+      { key: 'notas-gerar', label: 'Gerar notas', icon: FilePlus2, href: '/financeiro-ag/notas/gerar' },
+      { key: 'notas-regras', label: 'Regras da nota', icon: FileCog, href: '/financeiro-ag/notas/regras' },
+      { key: 'notas-retencoes', label: 'Retenções na fonte', icon: ReceiptText, href: '/financeiro-ag/notas/retencoes' },
+      { key: 'extrato', label: 'Extrato de conta', icon: ScrollText, href: '/financeiro-ag/extrato' },
+      { key: 'movimentacoes', label: 'Movimentações', icon: ListOrdered, href: '/financeiro-ag/movimentacoes' },
       { key: 'transferencias', label: 'Transferências', icon: ArrowRightLeft, href: '/financeiro-ag/transferencias' },
+      { key: 'cheques', label: 'Cheques emitidos', icon: ReceiptText, href: '/financeiro-ag/cheques' },
+      { key: 'fechamento', label: 'Fechar Caixa', icon: Lock, href: '/financeiro-ag/fechamento' },
+      { key: 'aprovacoes', label: 'Aprovações', icon: Stamp, href: '/financeiro-ag/aprovacoes' },
+      { key: 'reembolsos', label: 'Reembolsos', icon: Undo2, href: '/financeiro-ag/reembolsos' },
+      { key: 'creditos', label: 'Crédito do cliente', icon: PiggyBank, href: '/financeiro-ag/creditos' },
+    ],
+  },
+  {
+    title: 'Fornecedores',
+    items: [
+      { key: 'forn-faturas', label: 'Fatura do fornecedor', icon: FileStack, href: '/financeiro-ag/fornecedores/faturas' },
+      { key: 'forn-sinais', label: 'Sinais a fornecedores', icon: HandCoins, href: '/financeiro-ag/fornecedores/sinais' },
+      { key: 'forn-acordos', label: 'Acordos com fornecedores', icon: Handshake, href: '/financeiro-ag/fornecedores/acordos' },
+      { key: 'forn-comissoes', label: 'Comissão de fornecedores', icon: BadgePercent, href: '/financeiro-ag/fornecedores/comissoes' },
     ],
   },
   {
@@ -104,6 +143,17 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'contas-bancarias', label: 'Contas bancárias', icon: Landmark, href: '/financeiro-ag/contas-bancarias' },
       { key: 'cartoes-corp', label: 'Cartões', icon: CreditCard, href: '/financeiro-ag/cartoes' },
       { key: 'plano-contas', label: 'Categorias', icon: ListTree, href: '/financeiro-ag/plano-contas' },
+      { key: 'centros-custo', label: 'Centros de custo', icon: Network, href: '/financeiro-ag/centros-custo' },
+      { key: 'formas-pagamento', label: 'Formas de pagamento', icon: Wallet, href: '/financeiro-ag/formas-pagamento' },
+      { key: 'moedas', label: 'Moedas e câmbio', icon: Coins, href: '/financeiro-ag/moedas' },
+    ],
+  },
+  {
+    title: 'Relatórios',
+    items: [
+      { key: 'rel-categoria', label: 'Por categoria', icon: Tags, href: '/financeiro-ag/relatorios/lancamentos-categoria' },
+      { key: 'rel-centro', label: 'Por centro de custo', icon: Network, href: '/financeiro-ag/relatorios/lancamentos-centro-custo' },
+      { key: 'rel-rateio', label: 'Por rateio', icon: Split, href: '/financeiro-ag/relatorios/lancamentos-rateio' },
     ],
   },
 ];
@@ -113,7 +163,15 @@ const CONFIGURACOES_MENU: SidebarSection[] = [
     title: 'Geral',
     items: [
       { key: 'cfg-agencia', label: 'Dados da agência', icon: Building2, href: '/config/agencia' },
+      { key: 'cfg-empresas', label: 'Empresas', icon: Network, href: '/config/empresas' },
       { key: 'cfg-usuarios', label: 'Usuários', icon: Users, href: '/config/usuarios' },
+      { key: 'cfg-financeiro', label: 'Financeiro', icon: Percent, href: '/config/financeiro' },
+      { key: 'cfg-cobranca', label: 'Cobrança', icon: Barcode, href: '/config/cobranca' },
+      { key: 'cfg-vendas', label: 'Vendas', icon: ShoppingBag, href: '/config/vendas' },
+      { key: 'cfg-comissoes', label: 'Comissões', icon: Percent, href: '/config/comissoes' },
+      { key: 'cfg-mudanca', label: 'Mudar para o EnturOS', icon: FolderInput, href: '/mudanca' },
+      { key: 'cfg-perfis', label: 'Perfis de acesso', icon: ShieldCheck, href: '/config/perfis-de-acesso' },
+      { key: 'cfg-limites', label: 'Limites e aprovação', icon: Scale, href: '/config/limites-e-aprovacao' },
     ],
   },
   {
@@ -130,7 +188,7 @@ const CONFIGURACOES_MENU: SidebarSection[] = [
     title: 'Sistema',
     items: [
       { key: 'cfg-suporte', label: 'Suporte', icon: LifeBuoy, href: '/suporte' },
-      { key: 'cfg-auditoria', label: 'Auditoria', icon: ClipboardList, href: '/config/auditoria' },
+      { key: 'cfg-auditoria', label: 'Registro de atividades', icon: ClipboardList, href: '/config/auditoria' },
       { key: 'cfg-reset', label: 'Resetar dados', icon: Eraser, href: '/config/reset' },
     ],
   },
@@ -167,10 +225,14 @@ const PAI_NO_MENU: Array<[string, string]> = [
 export function PillarSidebar({ collapsed = false, onToggle, comSeletorDePilar = false }: PillarSidebarProps) {
   const pathname = usePathname();
   const activePillar = useActivePillar();
+  const { user } = useAuth();
 
   if (!activePillar) return null;
 
-  const sections = PILLAR_MENUS[activePillar];
+  const ecossistema = user?.tenantPerfil === 'ecossistema';
+  const sections = PILLAR_MENUS[activePillar]
+    .map(sec => ({ ...sec, items: sec.items.filter(it => !it.soEcossistema || ecossistema) }))
+    .filter(sec => sec.items.length > 0);
 
   // Um item ativo só: o MAIS ESPECÍFICO que casa com a rota. Antes era
   // "casa por prefixo", e em /financeiro-ag/receber acendiam juntos

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { Usuario, PerfilUsuario } from '@/lib/crm-types';
 import { PERFIS, permissoesParaPerfil, perfilCanonico } from '@/lib/permissoes';
-import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
+import { loadEntities, deleteEntity } from '@/lib/crm-storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -89,7 +89,7 @@ export default function UsuariosPage() {
       toast.error('Apenas administradores podem editar usuários');
       return;
     }
-    setEditing({ ...u });
+    setEditing({ ...u, senha_hash: '' });
     setIsNew(false);
     setShowPassword(false);
   }
@@ -111,54 +111,59 @@ export default function UsuariosPage() {
     });
   }
 
+  // Grava pelo servidor e devolve o erro dele, se houver. Antes a resposta
+  // de erro entrava na lista como se fosse um usuário.
+  async function gravar(metodo: 'POST' | 'PUT', corpo: Record<string, unknown>, id?: string): Promise<Usuario> {
+    const res = await fetch(id ? `/api/${ENDPOINT}/${id}` : `/api/${ENDPOINT}`, {
+      method: metodo,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corpo),
+    });
+    const dados = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(typeof dados?.error === 'string' ? dados.error : `Erro ${res.status}`);
+    return dados as Usuario;
+  }
+
   async function handleSave() {
     if (!editing) return;
     setSaving(true);
     try {
-      const toSave = { ...editing };
-      // Garante permissões coerentes com o perfil na hora de salvar
-      toSave.permissoes = permissoesParaPerfil(toSave.perfil);
-
-      if (toSave.senha_hash && !toSave.senha_hash.includes(':')) {
-        if (toSave.senha_hash.length < 6) {
-          toast.error('A senha deve ter no mínimo 6 caracteres');
-          setSaving(false);
-          return;
-        }
-        const hashRes = await fetch('/api/auth/hash-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: toSave.senha_hash }),
-        });
-        if (hashRes.ok) {
-          const { hash } = await hashRes.json();
-          toSave.senha_hash = hash;
-        } else {
-          toast.error('Erro ao processar senha');
-          setSaving(false);
-          return;
-        }
-      } else if (!toSave.senha_hash && !isNew) {
-        const existing = usuarios.find(u => u.id === toSave.id);
-        if (existing) toSave.senha_hash = existing.senha_hash;
+      // O campo de senha da tela carrega o texto digitado. O hash é feito no
+      // servidor; o que vem dele nunca volta para cá.
+      const senha = editing.senha_hash || '';
+      if (senha && senha.length < 8) {
+        toast.error('A senha deve ter no mínimo 8 caracteres');
+        return;
       }
+      if (isNew && !senha && perfilCanonico(editing.perfil) !== 'COLABORADOR') {
+        toast.error('Defina uma senha para o novo usuário');
+        return;
+      }
+      const corpo: Record<string, unknown> = {
+        nome: editing.nome,
+        email: editing.email,
+        telefone: editing.telefone ?? '',
+        perfil: editing.perfil,
+        ativo: editing.ativo,
+        plano_comissao_id: editing.plano_comissao_id ?? '',
+        meta_mensal_vendas: editing.meta_mensal_vendas ?? 0,
+        meta_mensal_quantidade: editing.meta_mensal_quantidade ?? 0,
+      };
+      if (senha) corpo.senha = senha;
 
       if (isNew) {
-        if (!toSave.senha_hash) {
-          toast.error('Defina uma senha para o novo usuário');
-          setSaving(false);
-          return;
-        }
-        const saved = await saveEntity<Usuario>(ENDPOINT, toSave);
+        const saved = await gravar('POST', corpo);
         setUsuarios((prev) => [...prev, saved]);
         toast.success(`Usuário ${saved.nome} criado`);
       } else {
-        const updated = await updateEntity<Usuario>(ENDPOINT, toSave);
+        const updated = await gravar('PUT', corpo, editing.id);
         setUsuarios((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
         toast.success('Alterações salvas');
       }
       setEditing(null);
       setIsNew(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não foi possível salvar');
     } finally {
       setSaving(false);
     }
@@ -179,6 +184,8 @@ export default function UsuariosPage() {
       await deleteEntity(ENDPOINT, id);
       setUsuarios((prev) => prev.filter((u) => u.id !== id));
       toast.success('Usuário excluído');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não foi possível excluir');
     } finally {
       setDeletingId(null);
     }
@@ -191,14 +198,29 @@ export default function UsuariosPage() {
       toast.error('Você não pode alterar seu próprio perfil');
       return;
     }
-    const updated: Usuario = {
-      ...u,
-      perfil: novoPerfil,
-      permissoes: permissoesParaPerfil(novoPerfil),
-    };
-    const saved = await updateEntity<Usuario>(ENDPOINT, updated);
+    let saved: Usuario;
+    try {
+      saved = await gravar('PUT', { perfil: novoPerfil }, u.id);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não foi possível alterar o perfil');
+      return;
+    }
     setUsuarios((prev) => prev.map(x => x.id === saved.id ? saved : x));
     toast.success(`${u.nome} agora é ${perfilCanonico(novoPerfil).toLowerCase()}`);
+  }
+
+  // Para quem perdeu o celular: no próximo login a pessoa cadastra o
+  // aplicativo autenticador de novo.
+  async function zerar2fa(u: Usuario) {
+    if (!isAdmin || u.id === currentUser?.id) return;
+    if (!confirm(`Zerar o segundo fator de ${u.nome}? No próximo login a pessoa vai cadastrar o aplicativo de novo.`)) return;
+    try {
+      const saved = await gravar('PUT', { resetar_2fa: true }, u.id);
+      setUsuarios((prev) => prev.map(x => x.id === saved.id ? saved : x));
+      toast.success('Segundo fator zerado');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não foi possível zerar');
+    }
   }
 
   const editingCanon = editing ? perfilCanonico(editing.perfil) : null;
@@ -297,7 +319,7 @@ export default function UsuariosPage() {
                       type={showPassword ? 'text' : 'password'}
                       value={editing.senha_hash}
                       onChange={(e) => setEditField('senha_hash', e.target.value)}
-                      placeholder={isNew ? 'Senha de acesso (mín. 6)' : 'Deixe em branco para manter'}
+                      placeholder={isNew ? 'Senha de acesso (mín. 8)' : 'Deixe em branco para manter'}
                       className="pr-10"
                     />
                     <button
@@ -421,6 +443,7 @@ export default function UsuariosPage() {
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 onQuickPerfil={quickChangePerfil}
+                onZerar2fa={zerar2fa}
                 deletingId={deletingId}
               />
             )}
@@ -466,7 +489,7 @@ function PermissoesPreview({ perms }: { perms: Usuario['permissoes'] }) {
 }
 
 function UsuariosTable({
-  usuarios, isAdmin, currentUserId, onEdit, onDelete, onQuickPerfil, deletingId,
+  usuarios, isAdmin, currentUserId, onEdit, onDelete, onQuickPerfil, onZerar2fa, deletingId,
 }: {
   usuarios: Usuario[];
   isAdmin: boolean;
@@ -474,6 +497,7 @@ function UsuariosTable({
   onEdit: (u: Usuario) => void;
   onDelete: (id: string) => void;
   onQuickPerfil: (u: Usuario, p: PerfilUsuario) => void;
+  onZerar2fa: (u: Usuario) => void;
   deletingId: string | null;
 }) {
   const sorted = useMemo(() => [...usuarios].sort((a, b) => {
@@ -544,6 +568,17 @@ function UsuariosTable({
                       <Button size="sm" variant="ghost" onClick={() => onEdit(u)} className="h-7 w-7 p-0">
                         <Pencil className="w-3.5 h-3.5" />
                       </Button>
+                      {!isSelf && (u as Usuario & { tem_2fa?: boolean }).tem_2fa && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onZerar2fa(u)}
+                          className="h-7 px-2 text-[11px]"
+                          title="Zerar o segundo fator: no próximo login a pessoa cadastra o aplicativo de novo"
+                        >
+                          Zerar 2FA
+                        </Button>
+                      )}
                       {!isSelf && (
                         <Button
                           size="sm"

@@ -203,12 +203,32 @@ export function MateriaisTab({ grupoId, onChange }: Props) {
   };
 
   const copiarLink = async (url: string) => {
-    const full = url.startsWith('http') ? url : `${window.location.origin}${url}`;
+    // Documento privado só abre com login: para mandar ao passageiro, o
+    // servidor gera um link assinado que vale 90 dias.
+    const obterLink = async (): Promise<string> => {
+      if (!url.startsWith('/api/arquivos/')) return url.startsWith('http') ? url : `${window.location.origin}${url}`;
+      const res = await fetch('/api/arquivos-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const dados = await res.json().catch(() => null);
+      if (!res.ok || typeof dados?.url !== 'string') throw new Error(dados?.error || 'Não foi possível gerar o link');
+      return dados.url;
+    };
     try {
-      await navigator.clipboard.writeText(full);
+      // ClipboardItem com promessa: o Safari só copia dentro do clique, e a
+      // busca do link assinado é assíncrona.
+      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'text/plain': obterLink().then(t => new Blob([t], { type: 'text/plain' })) }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(await obterLink());
+      }
       toast.success('Link copiado');
-    } catch {
-      toast.error('Falha ao copiar');
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : 'Falha ao copiar');
     }
   };
 
@@ -270,7 +290,8 @@ export function MateriaisTab({ grupoId, onChange }: Props) {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {filtrados.map(m => {
             const Icon = ICONE_TIPO[m.tipo];
-            const isExternal = !m.url.startsWith('/api/uploads/');
+            // Documento enviado vai para /api/arquivos/ (privado) desde 04/11/2026.
+            const isExternal = !m.url.startsWith('/api/uploads/') && !m.url.startsWith('/api/arquivos/');
             return (
               <div key={m.id} className="border p-4 flex flex-col gap-2" style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)' }}>
                 <div className="flex items-start gap-3">
