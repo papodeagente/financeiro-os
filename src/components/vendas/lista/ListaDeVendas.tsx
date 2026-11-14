@@ -140,10 +140,10 @@ export function ListaDeVendas() {
     },
     { id: 'data', cabecalho: 'Data', tipo: 'data', sortable: true, valor: l => l.data_venda || null },
     {
-      id: 'cliente', cabecalho: 'Cliente e produtos', tipo: 'texto', sortable: true, minWidth: 220,
+      id: 'cliente', cabecalho: 'Cliente e produtos', tipo: 'texto', sortable: true, minWidth: 180,
       acessor: l => l.cliente,
       render: l => (
-        <span className="flex min-w-0 flex-col">
+        <span className="flex min-w-0 max-w-[200px] flex-col">
           <span className="truncate text-[var(--fin-text)]">{l.cliente}</span>
           <span className="truncate fin-t-caption text-[var(--fin-text-3)]" title={l.produtos}>
             {l.tipos.map(t => ROTULO_TIPO_PRODUTO[t]).join(' · ') || 'Sem produto'}
@@ -153,11 +153,11 @@ export function ListaDeVendas() {
       ),
     },
     {
-      id: 'fornecedores', cabecalho: 'Fornecedores', tipo: 'texto', prioridade: 2, minWidth: 160,
+      id: 'fornecedores', cabecalho: 'Fornecedores', tipo: 'texto', prioridade: 2, minWidth: 130,
       acessor: l => l.fornecedores.map(p => p.nome).join(', '),
-      render: l => <span className="text-[var(--fin-text-2)]">{l.fornecedores.length ? nomesCurtos(l.fornecedores.map(p => p.nome)) : '—'}</span>,
+      render: l => <span className="block max-w-[150px] text-[var(--fin-text-2)]">{l.fornecedores.length ? nomesCurtos(l.fornecedores.map(p => p.nome)) : '—'}</span>,
     },
-    { id: 'vendedor', cabecalho: 'Vendedor', tipo: 'texto', sortable: true, prioridade: 1, acessor: l => l.vendedor, render: l => <span className="text-[var(--fin-text-2)]">{l.vendedor}</span> },
+    { id: 'vendedor', cabecalho: 'Vendedor', tipo: 'texto', sortable: true, prioridade: 1, acessor: l => l.vendedor, render: l => <span title={l.vendedor} className="block max-w-[110px] truncate text-[var(--fin-text-2)]">{l.vendedor}</span> },
     { id: 'unidade', cabecalho: 'Unidade', tipo: 'texto', sortable: true, prioridade: 1, acessor: l => l.unidade, render: l => <span className="text-[var(--fin-text-2)]">{l.unidade || '—'}</span> },
     { id: 'situacao', cabecalho: 'Situação', tipo: 'texto', sortable: true, acessor: l => l.situacao, render: l => <ChipDaSituacao situacao={l.situacao} /> },
     { id: 'faturamento', cabecalho: 'Faturamento', tipo: 'dinheiro', sortable: true, valor: l => reaisDe(l.faturamento) },

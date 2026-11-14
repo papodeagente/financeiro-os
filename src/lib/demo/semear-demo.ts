@@ -236,18 +236,22 @@ const FORNECEDORES: Array<[chave: string, tipo: string, nome: string, base: stri
 ];
 
 async function categorias(exec: ExecutorSQL, t: string): Promise<Contexto['cat']> {
+  // O nome mora em data->>'nome' (o cadastro grava assim); a coluna descricao
+  // fica vazia. Só categorias-folha (código com dois pontos) recebem lançamento.
   const { rows } = await exec.query(
-    `SELECT id, COALESCE(descricao, data->>'descricao', '') AS d, UPPER(COALESCE(tipo, data->>'tipo', '')) AS tipo
-       FROM plano_contas WHERE tenant_id = $1 ORDER BY COALESCE(codigo, data->>'codigo', ''), id`, [t],
+    `SELECT id, COALESCE(NULLIF(data->>'nome', ''), NULLIF(descricao, ''), data->>'descricao', '') AS d,
+            UPPER(COALESCE(NULLIF(tipo, ''), data->>'tipo', '')) AS tipo, COALESCE(NULLIF(codigo, ''), data->>'codigo', '') AS codigo
+       FROM plano_contas WHERE tenant_id = $1 ORDER BY COALESCE(NULLIF(codigo, ''), data->>'codigo', ''), id`, [t],
   );
-  const acha = (re: RegExp, tipo?: string) =>
-    String(rows.find(r => re.test(String(r.d)) && (!tipo || String(r.tipo).startsWith(tipo)))?.id ?? '');
-  const receita = acha(/./, 'RECEITA') || String(rows[0]?.id ?? '');
-  const despesa = acha(/./, 'DESPESA') || String(rows[0]?.id ?? '');
+  const folhas = rows.filter(r => (String(r.codigo).match(/\./g) ?? []).length >= 2);
+  const acha = (re: RegExp, tipo: string) =>
+    String(folhas.find(r => re.test(String(r.d)) && String(r.tipo).startsWith(tipo))?.id ?? '');
+  const receita = acha(/fee corporativo|assessoria|fee/i, 'RECEITA') || acha(/./, 'RECEITA') || String(rows[0]?.id ?? '');
+  const despesa = acha(/material|escrit[oó]rio|outras/i, 'DESPESA') || acha(/./, 'DESPESA') || String(rows[0]?.id ?? '');
   return {
     receita, despesa,
-    aluguel: acha(/aluguel/i) || despesa,
-    software: acha(/software|sistema|tecnologia|internet/i) || despesa,
+    aluguel: acha(/aluguel/i, 'DESPESA') || despesa,
+    software: acha(/software|sistema/i, 'DESPESA') || despesa,
   };
 }
 

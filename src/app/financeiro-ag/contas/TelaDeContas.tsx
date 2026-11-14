@@ -319,7 +319,10 @@ export function TelaDeContas() {
     if (!multi) return base;
     const empresa: FinColuna<LinhaDeConta> = {
       id: 'empresa', cabecalho: 'Empresa', tipo: 'texto', minWidth: 120,
-      render: l => <span className="whitespace-nowrap text-[var(--fin-text-2)]">{nomeDaEmpresa(empresas, l.empresa_id)}</span>,
+      render: l => {
+        const nome = nomeDaEmpresa(empresas, l.empresa_id);
+        return <span title={nome} className="block max-w-[120px] truncate text-[var(--fin-text-2)]">{nome}</span>;
+      },
     };
     const i = base.findIndex(c => c.id === 'pessoa');
     return [...base.slice(0, i), empresa, ...base.slice(i)];
