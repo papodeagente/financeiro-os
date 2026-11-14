@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useModulos } from '@/components/useModulos';
 import { ChevronDown, Download, FileSpreadsheet, FileText, Printer } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -110,7 +111,9 @@ export interface BotaoExportarProps {
 
 export function BotaoExportar({ endereco, documento, origem, desabilitado, podeExportar, tamanho = 'sm', className }: BotaoExportarProps) {
   const consultado = usePodeExportar();
-  const pode = podeExportar ?? consultado;
+  // Exportar é do módulo de relatórios (modulos.ts): sem ele, o botão some.
+  const modulos = useModulos();
+  const pode = (podeExportar ?? consultado) && (modulos.carregando || modulos.tem('relatorios'));
   const [aberto, setAberto] = React.useState(false);
   const [gerando, setGerando] = React.useState<FormatoDoBotao | null>(null);
   const caixa = React.useRef<HTMLDivElement>(null);

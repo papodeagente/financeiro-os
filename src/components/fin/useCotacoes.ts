@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useModulos } from '@/components/useModulos';
 
 import type { Cotacao, EstadoDaFonte, ValorDeIndice } from '@/lib/cambio';
 
@@ -37,13 +38,17 @@ function lerPainel(forcar = false): Promise<PainelDeCambioTela> {
 export function useCotacoes(): { painel: PainelDeCambioTela | null; estado: Estado; recarregar: () => void } {
   const [painel, setPainel] = React.useState<PainelDeCambioTela | null>(null);
   const [estado, setEstado] = React.useState<Estado>('carregando');
+  // Câmbio ao vivo é do módulo de câmbio (modulos.ts): sem ele, sem sugestão.
+  const modulos = useModulos();
+  const comCambio = modulos.carregando || modulos.tem('cambio');
   const carregar = React.useCallback((forcar = false) => {
     let vivo = true;
+    if (!comCambio) { setEstado('ok'); return () => { vivo = false; }; }
     lerPainel(forcar)
       .then(p => { if (vivo) { setPainel(p); setEstado('ok'); } })
       .catch(() => { if (vivo) setEstado('erro'); });
     return () => { vivo = false; };
-  }, []);
+  }, [comCambio]);
   React.useEffect(() => carregar(), [carregar]);
   return { painel, estado, recarregar: () => { carregar(true); } };
 }

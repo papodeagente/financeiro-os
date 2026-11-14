@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useModulos } from '@/components/useModulos';
 import Link from 'next/link';
 import {
   ArrowLeft, ArrowRight, Check, ChevronLeft, Copy, ExternalLink, FileText, MessageSquareWarning, Pencil, Receipt, Trash2,
@@ -359,6 +360,8 @@ function Numero({ rotulo, valor, dica, destaque, tom = 'neutro' }: { rotulo: str
 // Cobrança
 
 function BlocoDaCobranca({ ficha, nova }: { ficha: Ficha; nova: { linha: string | null; pix: string | null; url: string | null } | null }) {
+  // Cobranças é outro módulo (modulos.ts): o atalho só aparece com ele.
+  const modulos = useModulos();
   const c = ficha.cobranca;
   const linha = c?.linha_digitavel || nova?.linha || '';
   const pix = c?.pix_copia_cola || nova?.pix || '';
@@ -372,7 +375,7 @@ function BlocoDaCobranca({ ficha, nova }: { ficha: Ficha; nova: { linha: string 
         id="cobranca-da-fatura"
         titulo="Cobrança"
         descricao={c ? `${ROTULO_COBRANCA_CURTO[c.status] ?? c.status}${c.vencimento ? ` · vence ${dataBR(c.vencimento)}` : ''}. Quando o cliente paga, a fatura é baixada sozinha.` : 'Boleto e Pix emitidos.'}
-        acao={c ? <Link href={`/financeiro-ag/cobrancas`} className={cn(BOTAO_LINHA, 'fin-t-body')}>Ver em Cobranças</Link> : null}
+        acao={c && modulos.tem('cobranca') ? <Link href={`/financeiro-ag/cobrancas`} className={cn(BOTAO_LINHA, 'fin-t-body')}>Ver em Cobranças</Link> : null}
       />
       <div className="flex flex-wrap gap-[var(--fin-s-2)]">
         {linha ? <Button type="button" variant="outline" className="gap-[var(--fin-s-2)]" onClick={() => { void copiar(linha, 'Linha digitável'); }}><Copy aria-hidden="true" className="size-4" /> Copiar linha digitável</Button> : null}

@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useModulos } from '@/components/useModulos';
 
 import { MOEDAS, definirCatalogoDoNavegador, type CatalogoDeMoedas } from '@/lib/cambio';
 
@@ -39,12 +40,16 @@ export function recarregarMoedas(): Promise<CatalogoDeMoedas> {
 export function useMoedas(): { moedas: CatalogoDeMoedas; carregado: boolean } {
   const [moedas, setMoedas] = React.useState<CatalogoDeMoedas>(() => atual ?? MOEDAS);
   const [carregado, setCarregado] = React.useState(atual !== null);
+  // Moedas da agência são do módulo de câmbio (modulos.ts): sem ele, as do sistema.
+  const modulos = useModulos();
+  const comCambio = modulos.carregando || modulos.tem('cambio');
   React.useEffect(() => {
     let vivo = true;
+    if (!comCambio) { setCarregado(true); return () => { vivo = false; }; }
     const ouvir = (c: CatalogoDeMoedas) => { if (vivo) { setMoedas(c); setCarregado(true); } };
     ouvintes.add(ouvir);
     lerCatalogo().then(ouvir).catch(() => { if (vivo) setCarregado(true); });
     return () => { vivo = false; ouvintes.delete(ouvir); };
-  }, []);
+  }, [comCambio]);
   return { moedas, carregado };
 }
