@@ -22,6 +22,22 @@ export function round2(n: number): number {
   return Math.round((n + Number.EPSILON * Math.sign(n || 1)) * 100) / 100;
 }
 
+/**
+ * Reais → centavos inteiros (05/11/2026). Tabelas novas guardam dinheiro em
+ * centavos (BIGINT) para que somas nunca percam um centavo; as telas e o
+ * JSONB antigo continuam em reais, e a conversão acontece só na borda.
+ */
+export function paraCentavos(reais: number): number {
+  return Math.round(round2(reais) * 100);
+}
+
+/** Centavos inteiros → reais. */
+export function deCentavos(centavos: number | string | bigint | null | undefined): number {
+  const n = typeof centavos === 'bigint' ? Number(centavos) : Number(centavos ?? 0);
+  if (!Number.isFinite(n)) return 0;
+  return round2(Math.round(n) / 100);
+}
+
 /** Converte qualquer entrada (string, null, NaN) num número de dinheiro seguro. */
 export function num(v: unknown): number {
   if (typeof v === 'number') return Number.isFinite(v) ? v : 0;

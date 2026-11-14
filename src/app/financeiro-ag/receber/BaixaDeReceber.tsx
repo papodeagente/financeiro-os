@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import type { ContaReceber } from '@/lib/crm-types';
-import { updateEntity } from '@/lib/crm-storage';
-import { hojeISO, num, round2 } from '@/lib/money';
+import { num, round2 } from '@/lib/money';
 import { normalizarPlataforma, type DescontoPadrao } from '@/lib/taxa-plataforma';
 import { nomeDaPlataforma, plataformaDaConta } from '@/lib/plataformas/rotulo';
 import { toast } from '@/lib/toast';
 import { DialogBaixa } from './DialogBaixa';
 import { ehComissaoDeFornecedor } from '@/lib/comissao-da-venda';
+import { AguardandoAprovacao } from '@/components/fin/useLiquidacao';
 
 export type BaixaDeReceberProps = {
   /** A conta a receber; null fecha o diálogo. */
@@ -75,35 +75,30 @@ export function BaixaDeReceber({ conta, onFechar, onRegistrada, plataformasUsada
 
   async function baixar(
     item: ContaReceber,
-    dados: { valorInformado: number; taxaInformada: number; plataforma: string; novoPadrao: DescontoPadrao | null },
+    dados: {
+      valorInformado: number;
+      taxaInformada: number;
+      plataforma: string;
+      novoPadrao: DescontoPadrao | null;
+      gravar?: () => Promise<{ status_depois: string; saldo_depois: number }>;
+    },
   ) {
     const informado = round2(dados.valorInformado);
-    if (informado <= 0) return;
-
-    const acumulado = round2(num(item.valor_recebido) + informado);
-    // tolerância de meio centavo pra não deixar conta aberta por arredondamento
-    const quitado = acumulado >= round2(num(item.valor_final)) - 0.005;
-    const taxaAcumulada = round2(num(item.taxa) + Math.max(0, round2(dados.taxaInformada)));
-    const plataforma = normalizarPlataforma(dados.plataforma) || (item.taxa_plataforma ?? '');
-    const atualizada: ContaReceber = {
-      ...item,
-      status: quitado ? 'RECEBIDO' : 'PARCIAL',
-      data_recebimento: hojeISO(),
-      valor_recebido: quitado ? round2(num(item.valor_final)) : acumulado,
-      taxa: taxaAcumulada,
-      taxa_plataforma: taxaAcumulada > 0 ? plataforma : (item.taxa_plataforma ?? ''),
-    };
+    if (informado <= 0 || !dados.gravar) return;
     setBaixando(true);
     try {
-      await updateEntity('contas-receber', atualizada);
+      // A liquidação é gravada no servidor (05/11/2026): ele refaz a conta,
+      // move o caixa, guarda o histórico e recusa se a conta mudou no meio.
+      const plano = await dados.gravar();
       onFechar();
-      toast.success(quitado ? 'Conta marcada como recebida.' : 'Recebimento em parte registrado.');
+      toast.success(plano.status_depois === 'RECEBIDO' ? 'Conta marcada como recebida.' : 'Recebimento em parte registrado.');
       // O padrão é guardado DEPOIS da baixa e à parte dela: falhar aqui não
       // pode desfazer nem esconder um recebimento que já foi registrado.
       if (dados.novoPadrao) await guardarDescontoPadrao(dados.novoPadrao);
       onRegistrada?.();
-    } catch {
-      toast.error('Não foi possível registrar o recebimento.');
+    } catch (e) {
+      if (e instanceof AguardandoAprovacao) return;
+      toast.error('Não foi possível registrar o recebimento.', e instanceof Error ? e.message : '');
     } finally {
       setBaixando(false);
     }
@@ -127,6 +122,7 @@ export function BaixaDeReceber({ conta, onFechar, onRegistrada, plataformasUsada
       plataformasUsadas={usadas}
       descontosPadrao={descontosPadrao}
       processando={baixando}
+      titulo={conta}
       onConfirmar={dados => (conta ? baixar(conta, dados) : undefined)}
     />
   );

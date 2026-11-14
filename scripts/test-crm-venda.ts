@@ -2,7 +2,7 @@
 // Smoke test for the CRM -> Financeiro VENDA_FECHADA mapping.
 // Pure mapping only — no DB connection required.
 //
-// Usage: npx tsx scripts/test-crm-venda.ts
+// Uso: node --experimental-strip-types --no-warnings scripts/run-tests.mjs scripts/test-crm-venda.ts
 
 import {
   buildContaPagarFromFornecedor,

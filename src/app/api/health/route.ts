@@ -43,9 +43,13 @@ export async function GET() {
     const { rows } = await healthPool.query<{
       sites_config: string | null;
       sites_eventos: string | null;
+      sites_reservas: string | null;
+      sites_movimentos: string | null;
     }>(`SELECT
       to_regclass('public.sites_config')::text AS sites_config,
-      to_regclass('public.sites_eventos')::text AS sites_eventos`);
+      to_regclass('public.sites_eventos')::text AS sites_eventos,
+      to_regclass('public.sites_reservas')::text AS sites_reservas,
+      to_regclass('public.sites_movimentos')::text AS sites_movimentos`);
     if (!rows[0] || Object.values(rows[0]).some((tabela) => !tabela)) {
       throw new Error('schema da integracao Sites incompleto');
     }

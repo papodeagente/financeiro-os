@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recalcularVagasPeriodo, registrarEvento, type ReservaData, type ReservaStatus } from '@/lib/gestao-grupos';
+import { recalcularVagasPeriodo, registrarEvento, parcelasValidas, MAX_PARCELAS, type ReservaData, type ReservaStatus } from '@/lib/gestao-grupos';
 
 // PUT /api/gestao-grupos/[grupo_id]/reservas/[reserva_id]
 // Atualiza campos editáveis da reserva. Quando status muda pra
@@ -27,6 +27,10 @@ export async function PUT(
   const reservaAtual = rows[0];
   const dataAtual = reservaAtual.data as ReservaData;
 
+  if (body.parcelas !== undefined && parcelasValidas(body.parcelas) === null) {
+    return NextResponse.json({ error: `Parcelas: de 1 a ${MAX_PARCELAS}.` }, { status: 400 });
+  }
+
   const STATUS_VALIDOS: ReservaStatus[] = ['reservado', 'confirmado', 'cancelado', 'lista_espera'];
   const novoStatus: ReservaStatus = STATUS_VALIDOS.includes(body.status)
     ? (body.status as ReservaStatus)
@@ -36,7 +40,7 @@ export async function PUT(
     nome_passageiro: typeof body.nome_passageiro === 'string' ? body.nome_passageiro : dataAtual.nome_passageiro,
     tipo_acomodacao: typeof body.tipo_acomodacao === 'string' ? body.tipo_acomodacao.toUpperCase() : dataAtual.tipo_acomodacao,
     valor_cobrado: body.valor_cobrado !== undefined ? Number(body.valor_cobrado) || 0 : dataAtual.valor_cobrado,
-    parcelas: body.parcelas !== undefined ? Math.max(1, Math.floor(Number(body.parcelas) || 1)) : dataAtual.parcelas,
+    parcelas: body.parcelas !== undefined ? (parcelasValidas(body.parcelas) ?? dataAtual.parcelas) : dataAtual.parcelas,
     observacoes: typeof body.observacoes === 'string' ? body.observacoes : dataAtual.observacoes,
     documentos_ok: body.documentos_ok !== undefined ? !!body.documentos_ok : dataAtual.documentos_ok,
     passaporte_vencimento: typeof body.passaporte_vencimento === 'string' ? body.passaporte_vencimento : dataAtual.passaporte_vencimento,
@@ -49,10 +53,39 @@ export async function PUT(
     return NextResponse.json({ error: 'Motivo do cancelamento é obrigatório' }, { status: 400 });
   }
 
-  await pool.query(
-    `UPDATE grupo_reservas SET status = $1, data = $2, updated_at = NOW() WHERE id = $3 AND tenant_id = $4`,
-    [novoStatus, JSON.stringify(dataNova), reserva_id, tenantId],
-  );
+  // Reserva cancelada que volta a ocupar vaga passa pela mesma régua da
+  // criação: período travado e vagas contadas na hora (FIN2-14).
+  const voltaAOcupar = reservaAtual.status === 'cancelado' && novoStatus !== 'cancelado';
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    if (voltaAOcupar) {
+      const { rows: pRows } = await client.query(
+        `SELECT data FROM grupo_periodos_vagas WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
+        [reservaAtual.periodo_id, tenantId],
+      );
+      const { rows: ocupadas } = await client.query(
+        `SELECT COUNT(*)::int AS n FROM grupo_reservas
+          WHERE periodo_id = $1 AND tenant_id = $2 AND status IN ('reservado', 'lista_espera', 'confirmado')`,
+        [reservaAtual.periodo_id, tenantId],
+      );
+      const total = Number((pRows[0]?.data as { vagas_total?: number } | undefined)?.vagas_total ?? 0);
+      if (novoStatus !== 'lista_espera' && Number(ocupadas[0]?.n ?? 0) >= total) {
+        await client.query('ROLLBACK');
+        return NextResponse.json({ error: 'Não há vagas disponíveis neste período' }, { status: 409 });
+      }
+    }
+    await client.query(
+      `UPDATE grupo_reservas SET status = $1, data = $2, updated_at = NOW() WHERE id = $3 AND tenant_id = $4`,
+      [novoStatus, JSON.stringify(dataNova), reserva_id, tenantId],
+    );
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
 
   // Recalcula vagas do período se status mudou
   let periodoAtualizado = null;

@@ -1,3 +1,4 @@
+import { recusaAdmin } from '@/lib/guarda-rota';
 import { NextResponse } from 'next/server';
 import { reprocessarVencimentosAtrasados } from '@/lib/crm-integration';
 import { getTenantId } from '@/lib/tenant';
@@ -6,6 +7,8 @@ import { getTenantId } from '@/lib/tenant';
 // para hoje + 30d × parcela_numero. Idempotente: só toca o que está vencido.
 export async function POST() {
   try {
+    const recusa = await recusaAdmin();
+    if (recusa) return recusa;
     const tenantId = await getTenantId();
     const r = await reprocessarVencimentosAtrasados(tenantId);
     return NextResponse.json(r);

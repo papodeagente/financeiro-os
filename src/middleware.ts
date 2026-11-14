@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { isCanonicalHost, extractHost, getCanonicalBaseUrl } from './lib/canonical-hosts';
 import { isMindMapImportPath, isPublicMindMapShareRequest } from './lib/mapa-mental-public-path';
+import { isPublicBasePath } from './lib/public-paths';
+import { corpoSimplesEmRotaJson, origemPermitida } from './lib/origem-da-mutacao';
 import { csPodeAbrir, papelDaSessao } from './lib/plataforma';
 
 let _jwtSecret: Uint8Array | null = null;
@@ -17,29 +19,6 @@ function getJwtSecret() {
 }
 
 const COOKIE_NAME = 'entur-session';
-
-// Public routes that don't require authentication
-const PUBLIC_PATHS = [
-  '/login', '/api/auth/login', '/api/auth/seed', '/api/auth/session',
-  '/api/auth/signup',
-  '/signup',
-  '/p/', '/api/propostas/public/', '/api/uploads/',
-  '/api/v1/crm/webhook', '/api/v1/crm/health',
-  // Webhook das plataformas de venda: quem chama é a Hotmart, o Asaas ou
-  // o Pagar.me, que não têm sessão. A autenticação é por token ou
-  // assinatura dentro da própria rota, por agência.
-  '/api/v1/plataformas/',
-  '/admin/login', '/api/admin/auth/login', '/api/admin/auth/seed',
-  '/api/planos',
-  '/api/marketing/',
-  '/api/convites/',
-];
-
-// Caminho exato — '/' nao pode ser prefixo (capturaria tudo). Landing
-// page acessivel sem auth; logged-in users veem a LP normalmente
-// tambem (o /page.tsx redireciona logged-in pro dashboard via client).
-// '/api/health' é a sonda do orquestrador (Coolify): sem sessão, sem prefixo.
-const PUBLIC_EXACT_PATHS = new Set(['/', '/api/health']);
 
 function loginComRetorno(request: NextRequest): URL {
   const target = new URL('/login', request.url);
@@ -57,6 +36,10 @@ function addSecurityHeaders(response: NextResponse) {
   response.headers.set('X-XSS-Protection', '1; mode=block');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  // CSP mínima que não quebra a aplicação: sem plugin, sem <base> alheio,
+  // sem ser emoldurado por outro site. A limpeza do HTML (src/lib/html-seguro)
+  // continua sendo a defesa principal contra script injetado (FIN-07).
+  response.headers.set('Content-Security-Policy', "object-src 'none'; base-uri 'self'; frame-ancestors 'self'");
   return response;
 }
 
@@ -99,14 +82,22 @@ export async function middleware(request: NextRequest) {
   // PUT e DELETE de planos de comissão) por simples casamento de string. O
   // isolamento sobrevivia só porque getTenantId lança sem sessão, ou seja,
   // dependia de uma exceção em vez da autenticação.
-  const casaPrefixoPublico = (p: string) =>
-    pathname === p || pathname.startsWith(p.endsWith('/') ? p : `${p}/`);
   if (
-    PUBLIC_EXACT_PATHS.has(pathname)
-    || PUBLIC_PATHS.some(casaPrefixoPublico)
+    isPublicBasePath(pathname)
     || isPublicMindMapShareRequest(pathname, request.method)
   ) {
     const response = addSecurityHeaders(next());
+    // O endereço da proposta é o token dela: não vaza pelo Referer (FIN-13).
+    if (
+      pathname.startsWith('/p/') || pathname.startsWith('/api/propostas/public/')
+      // O endereço do portal do cliente também é o token dele.
+      || pathname.startsWith('/c/') || pathname.startsWith('/api/portal/')
+      // E o do link de leitura de relatório (E7).
+      || pathname.startsWith('/r/') || pathname.startsWith('/api/leitura/')
+    ) {
+      response.headers.set('Referrer-Policy', 'no-referrer');
+      response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+    }
     if (isPublicMindMapShareRequest(pathname, request.method)) {
       response.headers.set('Referrer-Policy', 'no-referrer');
       response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
@@ -150,6 +141,17 @@ export async function middleware(request: NextRequest) {
   // Verify JWT
   try {
     const { payload } = await jwtVerify(token, getJwtSecret());
+
+    // Escrita com cookie só da própria origem, e as rotas administrativas de
+    // JSON não aceitam corpo de formulário (auditoria 04/11/2026, FIN2-16).
+    if (pathname.startsWith('/api/')) {
+      if (!origemPermitida(request.method, request.url, request.headers, [getCanonicalBaseUrl()], isCanonicalHost)) {
+        return NextResponse.json({ error: 'Origem não permitida' }, { status: 403 });
+      }
+      if (corpoSimplesEmRotaJson(request.method, pathname, request.headers.get('content-type'))) {
+        return NextResponse.json({ error: 'Envie JSON (Content-Type: application/json)' }, { status: 415 });
+      }
+    }
 
     // Admin routes: super admin, ou CS nos caminhos dele (src/lib/plataforma.ts).
     // O CS também não usa o app das agências: fora da lista dele, nada abre.

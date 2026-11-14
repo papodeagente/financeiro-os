@@ -1,5 +1,6 @@
 'use client';
 
+import { CampoCambio } from '@/components/fin/CampoCambio';
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2, TriangleAlert } from 'lucide-react';
 
@@ -419,7 +420,7 @@ export function NovaVenda({ aberto, onFechar, onGravada, onOutroRecebimento }: N
                       className={CONTROLE}
                     />
                     {l.daAgencia ? null : (
-                      <Select value={l.moeda} onValueChange={v => atualizar(l.id, { moeda: (v ?? 'BRL') as Moeda, cambio: v === 'BRL' ? 1 : l.cambio })}>
+                      <Select value={l.moeda} onValueChange={v => atualizar(l.id, { moeda: (v ?? 'BRL') as Moeda, cambio: v === 'BRL' ? 1 : l.cambio, cambio_carimbo: v === 'BRL' ? null : l.cambio_carimbo })}>
                         <SelectTrigger aria-label={`Moeda do serviço ${i + 1}`} className={cn(CONTROLE, 'w-full')}>
                           <SelectValue>{() => (l.moeda === 'BRL' ? 'Real' : l.moeda === 'USD' ? 'Dólar' : 'Euro')}</SelectValue>
                         </SelectTrigger>
@@ -431,10 +432,14 @@ export function NovaVenda({ aberto, onFechar, onGravada, onOutroRecebimento }: N
                       </Select>
                     )}
                     {!l.daAgencia && l.moeda !== 'BRL' ? (
-                      <div className="flex items-center gap-2">
-                        <span className="fin-t-caption text-[var(--fin-text-2)]">Câmbio</span>
-                        <CampoValor rotulo={`Câmbio do serviço ${i + 1}`} valor={l.cambio} onChange={v => atualizar(l.id, { cambio: v })} invalido={Boolean(erro && /câmbio/.test(erro))} />
-                      </div>
+                      <CampoCambio
+                        moeda={l.moeda}
+                        valor={l.cambio}
+                        carimbo={l.cambio_carimbo}
+                        rotulo={`Câmbio do serviço ${i + 1}`}
+                        erro={erro && /câmbio/.test(erro) ? erro : null}
+                        onChange={(cambio, carimbo) => atualizar(l.id, { cambio, cambio_carimbo: carimbo })}
+                      />
                     ) : null}
                     {l.daAgencia ? null : (
                       <label className="flex min-h-11 items-center gap-2 fin-t-body text-[var(--fin-text-2)] lg:min-h-10">

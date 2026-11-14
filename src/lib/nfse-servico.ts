@@ -7,6 +7,7 @@
  */
 
 import pool from './db';
+import { cifrar, decifrar, cofreDisponivel } from './cofre';
 import { generateId } from './utils';
 import { hojeISO, num, percentual, round2 } from './money';
 import { opcoesTransmissiveis } from './nfse-formulario';
@@ -34,6 +35,9 @@ import type {
   RegimeNota,
   TomadorNota,
 } from './nfse-tipos';
+import { empresaDoRegistro } from './empresas';
+import { empresaComConfigPropria } from './empresas-config';
+import { recusaDaDemo } from './demo/saidas';
 
 export const CONFIG_FISCAL_ID = 'config-fiscal-singleton';
 
@@ -98,41 +102,95 @@ export function mascararToken(token: string): string {
 
 /** Config sem o token, pronta para ir ao navegador. */
 export function configParaCliente(config: ConfigFiscal): ConfigFiscal {
-  const { token, ...resto } = config;
+  const { token, ...resto } = config as ConfigFiscal & { token_cofre?: unknown };
+  delete (resto as { token_cofre?: unknown }).token_cofre;
   return { ...resto, token: '', token_mascarado: mascararToken(token ?? '') };
 }
 
-export async function carregarConfigFiscal(tenantId: string): Promise<ConfigFiscal> {
+/**
+ * A linha da configuração fiscal de cada empresa (E7). A principal fica na
+ * linha de sempre; as outras empresas têm a própria, que NUNCA herda token,
+ * certificado nem o número do emissor da principal (emitir pela empresa B
+ * com o CNPJ da A seria nota no nome errado).
+ */
+export function idDaConfigFiscal(empresaId?: string | null): string {
+  return empresaComConfigPropria(empresaId) ? `${CONFIG_FISCAL_ID}:${empresaId}` : CONFIG_FISCAL_ID;
+}
+
+export async function carregarConfigFiscal(tenantId: string, empresaId?: string | null): Promise<ConfigFiscal> {
   if (!pool) return configFiscalPadrao();
+  const idDaLinha = idDaConfigFiscal(empresaId);
   const { rows } = await pool.query(
     `SELECT data FROM config_fiscal WHERE id = $1 AND tenant_id = $2`,
-    [CONFIG_FISCAL_ID, tenantId],
+    [idDaLinha, tenantId],
   );
-  const gravado = (rows[0]?.data ?? {}) as Partial<ConfigFiscal>;
-  return { ...configFiscalPadrao(), ...gravado, id: CONFIG_FISCAL_ID };
+  const gravado = { ...((rows[0]?.data ?? {}) as Partial<ConfigFiscal> & { token_cofre?: unknown }) };
+  // O token do emissor fica cifrado no cofre (FIN-11). Registro antigo, em
+  // texto, é regravado cifrado aqui mesmo.
+  if (gravado.token_cofre) {
+    try {
+      gravado.token = decifrar(gravado.token_cofre);
+      delete gravado.token_cofre;
+    } catch (e) {
+      // Fica com o envelope: a próxima gravação o preserva em vez de apagar.
+      console.error('[nfse] token do emissor não decifrou:', e instanceof Error ? e.message : e);
+      gravado.token = '';
+    }
+  }
+  const config = { ...configFiscalPadrao(), ...gravado, id: CONFIG_FISCAL_ID } as ConfigFiscal;
+  if (rows.length > 0 && !(rows[0].data as Record<string, unknown>)?.token_cofre && config.token && cofreDisponivel()) {
+    try { await salvarConfigFiscal(tenantId, config, empresaId); } catch { /* fica para o próximo salvar */ }
+  }
+  return config;
 }
 
 export async function salvarConfigFiscal(
   tenantId: string,
   config: ConfigFiscal,
+  empresaId?: string | null,
 ): Promise<void> {
   if (!pool) return;
+  const idDaLinha = idDaConfigFiscal(empresaId);
+  // Token do emissor vai cifrado. Sem a chave mestra, grava como antes.
+  const gravar: Record<string, unknown> = { ...config };
+  if (config.token && cofreDisponivel()) {
+    gravar.token_cofre = cifrar(config.token);
+    gravar.token = '';
+  } else if (config.token) {
+    delete gravar.token_cofre;
+  }
   // UPDATE e, se não existir, INSERT — mesmo caminho de config_apis, que não
   // depende de qual chave única a tabela tem no momento.
   const atualizado = await pool.query(
     `UPDATE config_fiscal SET data = $3, updated_at = NOW()
       WHERE id = $1 AND tenant_id = $2`,
-    [CONFIG_FISCAL_ID, tenantId, JSON.stringify(config)],
+    [idDaLinha, tenantId, JSON.stringify(gravar)],
   );
   if ((atualizado.rowCount ?? 0) === 0) {
     await pool.query(
       `INSERT INTO config_fiscal (id, tenant_id, data) VALUES ($1, $2, $3)`,
-      [CONFIG_FISCAL_ID, tenantId, JSON.stringify(config)],
+      [idDaLinha, tenantId, JSON.stringify(gravar)],
     );
   }
 }
 
-export async function carregarEmitente(tenantId: string): Promise<DadosEmitente> {
+export async function carregarEmitente(tenantId: string, empresaId?: string | null): Promise<DadosEmitente> {
+  const daAgencia = await carregarEmitenteDaAgencia(tenantId);
+  if (!pool || !empresaComConfigPropria(empresaId)) return daAgencia;
+  // Empresa além da principal (E7): nome, razão social e CNPJ dela; o
+  // endereço e o regime seguem os da agência até a empresa ter os próprios.
+  const { rows } = await pool.query(
+    `SELECT nome, razao_social, cnpj FROM empresas WHERE tenant_id = $1 AND id = $2`, [tenantId, empresaId]);
+  if (!rows[0]) return daAgencia;
+  return {
+    ...daAgencia,
+    cnpj: String(rows[0].cnpj ?? ''),
+    razao_social: String(rows[0].razao_social || rows[0].nome || ''),
+    nome_fantasia: String(rows[0].nome ?? ''),
+  };
+}
+
+async function carregarEmitenteDaAgencia(tenantId: string): Promise<DadosEmitente> {
   const vazio: DadosEmitente = {
     cnpj: '', inscricao_municipal: '', razao_social: '', nome_fantasia: '',
     endereco: { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', estado: '' },
@@ -185,10 +243,36 @@ function tomadorDoCliente(cliente: Record<string, unknown> | null): TomadorNota 
   };
 }
 
+/**
+ * O tomador da nota quando quem pagou foi o FORNECEDOR (a comissão que a
+ * operadora ou a consolidadora paga à agência). Lê o cadastro de
+ * fornecedores, que guarda CNPJ e razão social nas colunas e no JSON.
+ */
+export function tomadorDoFornecedor(f: Record<string, unknown> | null): TomadorNota {
+  const end = enderecoDoCliente(f);
+  return {
+    cpf_cnpj: String(f?.cnpj ?? f?.cpf_cnpj ?? '').trim(),
+    razao_social: String(f?.razao_social || f?.nome_fantasia || f?.nome || '').trim(),
+    email: String(f?.email ?? ''),
+    inscricao_municipal: String(f?.inscricao_municipal ?? ''),
+    endereco: { ...end, cidade: end.cidade || String(f?.cidade ?? ''), estado: end.estado || String(f?.estado ?? '') },
+  };
+}
+
+/** Quem paga a conta: o cliente da venda, ou o fornecedor (comissão). */
+export type NaturezaDaConta = 'CLIENTE' | 'COMISSAO_FORNECEDOR';
+
+export function naturezaDaConta(conta: Record<string, unknown>): NaturezaDaConta {
+  return String(conta.origem ?? '') === 'COMISSAO_FORNECEDOR' ? 'COMISSAO_FORNECEDOR' : 'CLIENTE';
+}
+
 export interface ContextoDaNota {
   conta: Record<string, unknown>;
   venda: Record<string, unknown> | null;
   cliente: Record<string, unknown> | null;
+  /** Conta de comissão: quem paga é o fornecedor, e ele é o tomador. */
+  natureza?: NaturezaDaConta;
+  fornecedor?: Record<string, unknown> | null;
 }
 
 /** Carrega a conta a receber com a venda e o cliente dela. */
@@ -214,6 +298,34 @@ export async function carregarContexto(
     venda = (r.rows[0]?.data ?? null) as Record<string, unknown> | null;
   }
 
+  // CONTA DE COMISSÃO (05/11/2026, E5): quem paga é o fornecedor, e o
+  // cliente_id dela guarda o id DELE. Antes, este id era procurado em
+  // clientes, não achava nada, e a nota para a operadora saía sem tomador
+  // (pendência "cliente sem CPF ou CNPJ" que ninguém conseguia resolver).
+  if (naturezaDaConta(conta) === 'COMISSAO_FORNECEDOR') {
+    const fornecedorId = String(conta.fornecedor_id || conta.venda_parte_id || conta.cliente_id || '');
+    let fornecedor: Record<string, unknown> | null = null;
+    if (fornecedorId) {
+      const r = await pool.query(
+        `SELECT nome_fantasia, cnpj, data FROM fornecedores_crm WHERE id = $1 AND tenant_id = $2`,
+        [fornecedorId, tenantId],
+      ).catch(() => ({ rows: [] as Array<Record<string, unknown>> }));
+      const linha = r.rows[0];
+      if (linha) {
+        const d = (linha.data ?? {}) as Record<string, unknown>;
+        fornecedor = {
+          ...d,
+          nome_fantasia: d.nome_fantasia || linha.nome_fantasia,
+          cnpj: d.cnpj || linha.cnpj,
+        };
+      }
+    }
+    if (!fornecedor && String(conta.cliente_nome || conta.fornecedor_nome || '')) {
+      fornecedor = { nome: String(conta.fornecedor_nome || conta.cliente_nome), cnpj: String(conta.fornecedor_cnpj ?? '') };
+    }
+    return { conta, venda, cliente: null, natureza: 'COMISSAO_FORNECEDOR', fornecedor };
+  }
+
   const clienteId = String(conta.cliente_id || venda?.cliente_id || '');
   let cliente: Record<string, unknown> | null = null;
   if (clienteId) {
@@ -223,7 +335,7 @@ export async function carregarContexto(
     );
     cliente = (r.rows[0]?.data ?? null) as Record<string, unknown> | null;
   }
-  return { conta, venda, cliente };
+  return { conta, venda, cliente, natureza: 'CLIENTE', fornecedor: null };
 }
 
 /**
@@ -318,8 +430,10 @@ export async function montarPrevia(
 ): Promise<PreviaDaNota | null> {
   const ctx = await carregarContexto(tenantId, contaReceberId);
   if (!ctx) return null;
-  const config = await carregarConfigFiscal(tenantId);
-  const emitente = await carregarEmitente(tenantId);
+  // Emissão por empresa (E7): a nota sai pela empresa da conta a receber.
+  const empresaDaNota = empresaDoRegistro(ctx.conta as Record<string, unknown>);
+  const config = await carregarConfigFiscal(tenantId, empresaDaNota);
+  const emitente = await carregarEmitente(tenantId, empresaDaNota);
   const notaExistente = await notaDaConta(tenantId, contaReceberId);
 
   const valorRecebido = valorRecebidoDaConta(ctx.conta);
@@ -328,10 +442,15 @@ export async function montarPrevia(
   );
   const custo = round2(num(ctx.venda?.valor_total_custo) || num(ctx.venda?.custo_total));
 
+  const daComissao = ctx.natureza === 'COMISSAO_FORNECEDOR';
+  // A comissão é receita inteira da agência: o regime de intermediação é o
+  // que descreve o serviço, e a margem da venda do cliente não se aplica.
   const regime = opcoes.regime
-    ?? (config.regime_padrao === 'INTERMEDIACAO'
-      ? regimeSugerido(valorTotalVenda, custo)
-      : config.regime_padrao);
+    ?? (daComissao
+      ? 'INTERMEDIACAO'
+      : config.regime_padrao === 'INTERMEDIACAO'
+        ? regimeSugerido(valorTotalVenda, custo)
+        : config.regime_padrao);
   const formaBase = opcoes.forma_base ?? config.forma_base_intermediacao;
   const aliquota = opcoes.aliquota_iss ?? config.aliquota_iss;
   const issRetido = opcoes.iss_retido ?? config.iss_retido_padrao;
@@ -346,9 +465,10 @@ export async function montarPrevia(
     iss_retido: issRetido,
     desconto_incondicionado: opcoes.desconto_incondicionado ?? 0,
     deducao_manual: opcoes.deducao_manual ?? null,
+    receita_integral: daComissao,
   });
 
-  const tomador = tomadorDoCliente(ctx.cliente);
+  const tomador = daComissao ? tomadorDoFornecedor(ctx.fornecedor ?? null) : tomadorDoCliente(ctx.cliente);
 
   // As capacidades do emissor entram no cálculo como ERRO, não como aviso:
   // uma nota emitida num formato que o emissor não recebe sai com valor
@@ -393,6 +513,7 @@ export async function montarPrevia(
     cod_tributacao_nacional: config.cod_tributacao_nacional,
     simples_nacional: config.simples_nacional,
     regime_apuracao: config.regime_apuracao,
+    tomador_e_fornecedor: daComissao,
   });
 
   const totalParcelas = Math.max(1, Math.floor(num(ctx.conta.total_parcelas)) || 1);
@@ -504,7 +625,7 @@ export async function notaDaConta(
   return (rows[0]?.data ?? null) as NotaFiscal | null;
 }
 
-async function gravarNota(tenantId: string, nota: NotaFiscal): Promise<void> {
+export async function gravarNota(tenantId: string, nota: NotaFiscal): Promise<void> {
   if (!pool) return;
   await pool.query(
     `INSERT INTO notas_fiscais
@@ -529,6 +650,27 @@ function ehDuplicata(e: unknown): boolean {
     e && typeof e === 'object'
     && String((e as { code?: string }).code ?? '') === '23505',
   );
+}
+
+/**
+ * Como fica a nota quando a transmissão lança erro (FIN2-09): recusa de
+ * verdade vira REJEITADA; falha de transporte segue PROCESSANDO com o
+ * resultado desconhecido (viva, bloqueando outra emissão da parcela).
+ */
+export function notaAposFalhaDeTransmissao(nota: NotaFiscal, e: unknown): NotaFiscal {
+  const incerto = !(e instanceof ErroFiscal) || e.incerto;
+  return incerto
+    ? {
+        ...nota,
+        status: 'PROCESSANDO',
+        resultado_desconhecido: true,
+        erro: 'A transmissão não teve resposta. A nota pode ter sido emitida: use "Atualizar status" antes de qualquer outra ação.',
+      }
+    : {
+        ...nota,
+        status: 'REJEITADA',
+        erro: e instanceof Error ? e.message : 'Falha ao transmitir a nota.',
+      };
 }
 
 /**
@@ -561,7 +703,12 @@ export async function emitirNota(
    * A alíquota do ISS é a única que fica: ela já é tratada como estimativa em
    * todo o sistema, e `issEhEstimativa` é o que diz isso na tela.
    */
-  const configParaLimite = await carregarConfigFiscal(tenantId);
+  // Agência de demonstração: nenhuma nota vai à prefeitura (demo/saidas.ts).
+  const recusaDemo = pool ? await recusaDaDemo(pool, tenantId) : null;
+  if (recusaDemo) throw new ErroFiscal(`Nota não emitida: ${recusaDemo}. Registre como emitida fora do sistema.`);
+  const ctxDaEmpresa = await carregarContexto(tenantId, contaReceberId);
+  const empresaDaNota = empresaDoRegistro((ctxDaEmpresa?.conta ?? {}) as Record<string, unknown>);
+  const configParaLimite = await carregarConfigFiscal(tenantId, empresaDaNota);
   let transmite = {
     deducoes: true, aliquota_por_nota: true, intermediario: true,
     retencao_fonte: false, reforma_tributaria: false, nbs: false,
@@ -589,8 +736,8 @@ export async function emitirNota(
   }
 
 
-  const config = await carregarConfigFiscal(tenantId);
-  const emitente = await carregarEmitente(tenantId);
+  const config = await carregarConfigFiscal(tenantId, empresaDaNota);
+  const emitente = await carregarEmitente(tenantId, empresaDaNota);
   const ctx = await carregarContexto(tenantId, contaReceberId);
   const agora = new Date().toISOString();
 
@@ -668,13 +815,16 @@ export async function emitirNota(
     await gravarNota(tenantId, atualizada);
     return atualizada;
   } catch (e) {
-    const rejeitada: NotaFiscal = {
-      ...nota,
-      status: 'REJEITADA',
-      erro: e instanceof Error ? e.message : 'Falha ao transmitir a nota.',
-    };
-    await gravarNota(tenantId, rejeitada);
-    return rejeitada;
+    // Recusa de verdade (o emissor disse não, ou a nota nem saiu daqui) vira
+    // REJEITADA e libera nova tentativa. Falha de transporte NÃO: a prefeitura
+    // pode ter aceitado e a resposta se perdido. A nota fica PROCESSANDO com o
+    // resultado desconhecido, o índice de nota viva impede outra emissão, e
+    // "atualizar status" consulta ou reenvia com o MESMO id (mesma chave de
+    // idempotência no emissor). Antes, timeout virava REJEITADA e a parcela
+    // podia ganhar duas notas (FIN2-09).
+    const registrada = notaAposFalhaDeTransmissao(nota, e);
+    await gravarNota(tenantId, registrada);
+    return registrada;
   }
 }
 
@@ -692,8 +842,48 @@ export async function atualizarStatus(
   if (!nota) return null;
   if (nota.status !== 'PROCESSANDO') return nota;
 
-  const config = await carregarConfigFiscal(tenantId);
+  // O emissor da empresa da nota (E7).
+  const empresaDaNota = String((nota as unknown as Record<string, unknown>).empresa_id ?? '');
+  const config = await carregarConfigFiscal(tenantId, empresaDaNota);
   const emissor = emissorDaConfig(config);
+
+  // Resultado desconhecido sem protocolo (FIN2-09). Primeiro CONSULTA pela
+  // identidade que mandamos na emissão (idIntegracao). Só o emissor que não
+  // sabe consultar assim recebe a MESMA nota de novo (mesma chave de
+  // idempotência, cod_interno): se ela já saiu, ele responde "já existe",
+  // que fica como desconhecido — nunca vira REJEITADA e nunca libera outra.
+  if (nota.resultado_desconhecido && !nota.protocolo) {
+    try {
+      const emitente = await carregarEmitente(tenantId, empresaDaNota);
+      const r = emissor.consultarPorIntencao
+        ? await emissor.consultarPorIntencao(nota, config)
+        : await emissor.emitir({ nota, config, emitente });
+      const sabido = r.status === 'AUTORIZADA' || r.status === 'REJEITADA' || r.status === 'CANCELADA'
+        || !!(r.protocolo || r.numero);
+      if (!sabido) return nota; // segue desconhecido
+      const atualizada: NotaFiscal = {
+        ...nota,
+        resultado_desconhecido: false,
+        status: r.status,
+        numero: r.numero || nota.numero,
+        codigo_verificacao: r.codigo_verificacao || nota.codigo_verificacao,
+        protocolo: r.protocolo || nota.protocolo,
+        link_pdf: r.link_pdf || nota.link_pdf, link_xml: r.link_xml || nota.link_xml,
+        erro: r.erro,
+        autorizada_em: r.status === 'AUTORIZADA' ? new Date().toISOString() : '',
+      };
+      await gravarNota(tenantId, atualizada);
+      return atualizada;
+    } catch (e) {
+      if (e instanceof ErroFiscal && !e.incerto) {
+        const rejeitada: NotaFiscal = { ...nota, resultado_desconhecido: false, status: 'REJEITADA', erro: e.message };
+        await gravarNota(tenantId, rejeitada);
+        return rejeitada;
+      }
+      return nota; // segue desconhecido; tenta de novo depois
+    }
+  }
+
   const referencia = nota.protocolo || nota.id;
   const r = await emissor.consultar(referencia, config);
   const atualizada: NotaFiscal = {
@@ -733,12 +923,20 @@ export async function cancelarNota(
   const nota = (rows[0]?.data ?? null) as NotaFiscal | null;
   if (!nota) throw new ErroFiscal('Nota não encontrada.');
   if (nota.status === 'CANCELADA') return nota;
+  const recusaDemo = await recusaDaDemo(pool, tenantId);
+  if (recusaDemo) throw new ErroFiscal(`Nota não cancelada no emissor: ${recusaDemo}.`);
   if (!motivo.trim()) throw new ErroFiscal('Informe o motivo do cancelamento.');
 
-  const config = await carregarConfigFiscal(tenantId);
+  // O emissor da empresa da nota (E7).
+  const config = await carregarConfigFiscal(tenantId, String((nota as unknown as Record<string, unknown>).empresa_id ?? ''));
 
-  // Nota que nunca chegou à prefeitura não precisa ser cancelada lá.
-  if (nota.status === 'REJEITADA' || nota.status === 'RASCUNHO') {
+  // Nota que nunca chegou à prefeitura não precisa ser cancelada lá. A de
+  // resultado desconhecido sem protocolo também se encerra só aqui, por ação
+  // explícita com motivo (quem cancela conferiu no painel do emissor).
+  // A nota emitida fora do sistema (só registrada aqui) também: o emissor
+  // daqui não a conhece. A tela avisa para cancelar no portal da prefeitura.
+  if (nota.status === 'REJEITADA' || nota.status === 'RASCUNHO' || nota.emitida_fora === true
+    || (nota.resultado_desconhecido && !nota.protocolo)) {
     const local: NotaFiscal = {
       ...nota,
       status: 'CANCELADA',
@@ -761,11 +959,18 @@ export async function cancelarNota(
   return cancelada;
 }
 
-export async function listarNotas(tenantId: string): Promise<NotaFiscal[]> {
+export async function listarNotas(tenantId: string, empresas: readonly string[] | null = null): Promise<NotaFiscal[]> {
   if (!pool) return [];
-  const { rows } = await pool.query(
-    `SELECT data FROM notas_fiscais WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 500`,
-    [tenantId],
-  );
+  // Várias empresas (E7): só as notas das empresas no recorte.
+  const { rows } = empresas
+    ? await pool.query(
+      `SELECT data FROM notas_fiscais WHERE tenant_id = $1 AND COALESCE(NULLIF(data->>'empresa_id', ''), 'principal') = ANY($2::text[])
+        ORDER BY created_at DESC LIMIT 500`,
+      [tenantId, [...empresas]],
+    )
+    : await pool.query(
+      `SELECT data FROM notas_fiscais WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 500`,
+      [tenantId],
+    );
   return rows.map(r => r.data as NotaFiscal);
 }

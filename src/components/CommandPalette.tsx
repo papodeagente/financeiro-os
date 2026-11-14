@@ -2,75 +2,23 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Search, FolderOpen, FileText, BarChart3, Plane, Hotel, Globe,
-  LayoutDashboard, Medal, Percent, Settings, Wallet,
-  Gauge, TrendingUp, Receipt, CreditCard, BookOpen, Landmark,
-  ArrowRightLeft, Package, ShoppingCart, ListOrdered, UserPlus,
-  Building2, Briefcase, DollarSign, Link2, FileSpreadsheet, Plus,
-} from 'lucide-react';
-
-interface CommandItem {
-  id: string;
-  label: string;
-  href: string;
-  icon: React.ReactNode;
-  section: 'navegacao' | 'criar' | 'recentes' | 'crm';
-}
-
-const NAVIGATION_ITEMS: CommandItem[] = [
-  { id: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'grupos', label: 'Produtos', href: '/grupos', icon: <FolderOpen className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'propostas', label: 'Propostas', href: '/propostas', icon: <FileText className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'orcamentos', label: 'Orçamentos', href: '/vendas/orcamentos', icon: <BarChart3 className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'vendas', label: 'Vendas fechadas', href: '/vendas', icon: <ListOrdered className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'voos', label: 'Buscar voos', href: '/voos', icon: <Plane className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'hoteis', label: 'Buscar hotéis', href: '/hoteis', icon: <Hotel className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'destinos', label: 'Destinos', href: '/destinos', icon: <Globe className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'fluxo', label: 'Fluxo de caixa', href: '/financeiro-ag/fluxo-caixa', icon: <DollarSign className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'dre', label: 'Resultado do mês (DRE)', href: '/financeiro-ag/dre', icon: <FileSpreadsheet className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'lucro-real', label: 'Lucro real', href: '/relatorios/lucro-real', icon: <TrendingUp className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'receber', label: 'Contas a receber', href: '/financeiro-ag/receber', icon: <Receipt className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'pagar', label: 'Contas a pagar', href: '/financeiro-ag/pagar', icon: <CreditCard className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'conciliacao', label: 'Conciliação', href: '/financeiro-ag/conciliacao', icon: <FileSpreadsheet className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'transferencias', label: 'Transferências', href: '/financeiro-ag/transferencias', icon: <ArrowRightLeft className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'plano-contas', label: 'Categorias (plano de contas)', href: '/financeiro-ag/plano-contas', icon: <BookOpen className="w-4 h-4" />, section: 'navegacao' },
-  // Fora do menu do Financeiro desde 08/10/2026: a busca é o caminho curto.
-  { id: 'recebimentos', label: 'Recebimentos das plataformas', href: '/financeiro-ag/recebimentos', icon: <Receipt className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'notas', label: 'Notas fiscais', href: '/financeiro-ag/notas', icon: <FileText className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'cartoes', label: 'Cartões', href: '/financeiro-ag/cartoes', icon: <CreditCard className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'taxas', label: 'Taxas de pagamento', href: '/relatorios/taxas', icon: <Percent className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'comparativo', label: 'Comparativo mensal', href: '/relatorios/comparativo', icon: <BarChart3 className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'contas-bancarias', label: 'Contas bancárias', href: '/financeiro-ag/contas-bancarias', icon: <Landmark className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'fin-grupos', label: 'Financeiro por produto', href: '/financeiro-grupos', icon: <Package className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'clientes', label: 'Clientes', href: '/pessoas/clientes', icon: <UserPlus className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'fornecedores', label: 'Fornecedores', href: '/pessoas/fornecedores', icon: <Building2 className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'equipe', label: 'Equipe', href: '/pessoas/equipe', icon: <Briefcase className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'metas', label: 'Metas da equipe', href: '/equipe/metas', icon: <Medal className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'comissoes', label: 'Comissões', href: '/equipe/comissoes', icon: <Percent className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'planos-comissao', label: 'Planos de comissão', href: '/equipe/planos-comissao', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'custos', label: 'Custos do negócio', href: '/planejamento/custos', icon: <Wallet className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'relatorios', label: 'Relatórios financeiros', href: '/relatorios/financeiro', icon: <DollarSign className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'cac', label: 'Dashboard CAC', href: '/cac/dashboard', icon: <Gauge className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'rentabilidade', label: 'Rentabilidade', href: '/relatorios/rentabilidade', icon: <TrendingUp className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'config-agencia', label: 'Configurações', href: '/config/agencia', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
-];
-
-const CREATE_ITEMS: CommandItem[] = [
-  { id: 'novo-grupo', label: 'Novo produto', href: '/grupos', icon: <Plus className="w-4 h-4" />, section: 'criar' },
-  { id: 'nova-proposta', label: 'Nova proposta', href: '/propostas/nova', icon: <Plus className="w-4 h-4" />, section: 'criar' },
-  { id: 'nova-venda', label: 'Nova venda', href: '/vendas/nova', icon: <ShoppingCart className="w-4 h-4" />, section: 'criar' },
-];
-
-const CRM_ITEMS: CommandItem[] = [
-  { id: 'crm-status', label: 'Status da integração CRM', href: '/config/crm', icon: <Link2 className="w-4 h-4" />, section: 'crm' },
-];
+import { Search } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useModulos } from '@/components/useModulos';
+import { recentesDaConta, resultadosDaBusca, textoDaCaixa, type CommandItem } from '@/components/itens-da-busca';
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const [selectedIdx, setSelectedIdx] = useState(0);
+  // Versão e módulos da agência (itens-da-busca.ts): a simples busca como sempre buscou.
+  const { user } = useAuth();
+  const modulos = useModulos();
+  const ctx = useMemo(
+    () => ({ modulos: { ligados: modulos.ligados, telasCompletas: modulos.telasCompletas }, ecossistema: user?.tenantPerfil === 'ecossistema' }),
+    [modulos.ligados, modulos.telasCompletas, user?.tenantPerfil],
+  );
 
   useEffect(() => {
     if (open) {
@@ -84,21 +32,11 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     if (typeof window === 'undefined') return [];
     try {
       const stored = JSON.parse(localStorage.getItem('entur:recentes') || '[]') as string[];
-      return stored.slice(0, 5).map(href => {
-        const found = NAVIGATION_ITEMS.find(i => i.href === href);
-        return found ? { ...found, section: 'recentes' as const } : null;
-      }).filter(Boolean) as CommandItem[];
+      return recentesDaConta(stored, ctx);
     } catch { return []; }
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, ctx]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filtered = useMemo(() => {
-    if (!query.trim()) {
-      return [...CREATE_ITEMS, ...recents.slice(0, 3), ...CRM_ITEMS];
-    }
-    const q = query.toLowerCase();
-    const all = [...CREATE_ITEMS, ...NAVIGATION_ITEMS, ...CRM_ITEMS];
-    return all.filter(item => item.label.toLowerCase().includes(q));
-  }, [query, recents]);
+  const filtered = useMemo(() => resultadosDaBusca(query, recents, ctx), [query, recents, ctx]);
 
   const handleSelect = (item: CommandItem) => {
     onClose();
@@ -126,6 +64,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     recentes: 'Recentes',
     navegacao: 'Navegação',
     crm: 'Integração',
+    mercado: 'Pelo nome que você já usa',
+    glossario: 'Glossário da mudança',
   };
 
   let lastSection = '';
@@ -145,7 +85,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             value={query}
             onChange={e => { setQuery(e.target.value); setSelectedIdx(0); }}
             onKeyDown={handleKeyDown}
-            placeholder="Buscar paginas, criar..."
+            placeholder={textoDaCaixa(ctx)}
             className="flex-1 bg-transparent text-[length:var(--text-body)] text-[var(--t-text)] outline-none placeholder:text-[var(--t-text-muted)]"
           />
           <kbd className="text-[10px] text-[var(--t-text-muted)] bg-[var(--t-sidebar-item-hover)] px-1.5 py-0.5 rounded">ESC</kbd>
@@ -176,8 +116,15 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                   onClick={() => handleSelect(item)}
                   onMouseEnter={() => setSelectedIdx(idx)}
                 >
-                  {item.icon}
-                  <span>{item.label}</span>
+                  <item.icon className="w-4 h-4" />
+                  {item.dica ? (
+                    <span className="flex min-w-0 flex-col text-left">
+                      <span>{item.label}</span>
+                      <span className="fin-t-caption text-[var(--fin-text-3)]">{item.dica}</span>
+                    </span>
+                  ) : (
+                    <span>{item.label}</span>
+                  )}
                 </button>
               </div>
             );

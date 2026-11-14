@@ -6,6 +6,10 @@ import Link from 'next/link'
 import { ArrowLeft, Loader2, Users, Layers, DollarSign, UserCheck, Pause, Play, Save } from 'lucide-react'
 import { toast } from '@/lib/toast'
 import { useEhSuperAdmin } from '@/components/admin/PapelDaPlataforma'
+import { PLANOS_DO_SAAS } from '@/lib/planos-do-saas'
+import type { ModuloId } from '@/lib/modulos'
+import { VersaoEModulos } from './VersaoEModulos'
+import { SeloDemonstracao } from '@/components/admin/SeloDemonstracao'
 
 interface TenantDetail {
   id: string
@@ -18,10 +22,16 @@ interface TenantDetail {
   perfil?: string
   created_at: string
   stats: {
-    usuarios: number
-    grupos: number
-    vendas: number
+    userCount: number
+    grupoCount: number
+    vendaCount: number
   }
+  /** Versão e módulos (src/lib/modulos.ts). */
+  fin_versao?: string
+  modulos?: Partial<Record<ModuloId, boolean>>
+  modulos_liberados?: ModuloId[]
+  /** Agência de demonstração (Super Admin › Demonstração). */
+  demo?: boolean
 }
 
 export default function AdminTenantDetailPage() {
@@ -145,9 +155,9 @@ export default function AdminTenantDetailPage() {
   }
 
   const statCards = [
-    { label: 'Usuarios', value: tenant.stats.usuarios, icon: Users, color: 'text-[var(--fin-accent)]' },
-    { label: 'Grupos', value: tenant.stats.grupos, icon: Layers, color: 'text-[var(--fin-violet)]' },
-    { label: 'Vendas', value: tenant.stats.vendas, icon: DollarSign, color: 'text-[var(--fin-positive)]' },
+    { label: 'Usuarios', value: tenant.stats.userCount, icon: Users, color: 'text-[var(--fin-accent)]' },
+    { label: 'Grupos', value: tenant.stats.grupoCount, icon: Layers, color: 'text-[var(--fin-violet)]' },
+    { label: 'Vendas', value: tenant.stats.vendaCount, icon: DollarSign, color: 'text-[var(--fin-positive)]' },
   ]
 
   return (
@@ -168,6 +178,7 @@ export default function AdminTenantDetailPage() {
             <span className="text-sm text-[var(--fin-text-3)] font-mono">{tenant.slug}</span>
             <StatusBadge status={tenant.status} />
             <PlanBadge plano={tenant.plano} />
+            {tenant.demo === true ? <SeloDemonstracao /> : null}
           </div>
           {tenant.cnpj && (
             <p className="text-sm text-[var(--fin-text-3)] mt-1">CNPJ: {tenant.cnpj}</p>
@@ -190,6 +201,15 @@ export default function AdminTenantDetailPage() {
           </div>
         ))}
       </div>
+
+      {/* Versão e módulos: o CS vê; só o super admin muda. */}
+      <VersaoEModulos
+        tenantId={id}
+        dados={{ fin_versao: tenant.fin_versao, modulos: tenant.modulos }}
+        liberados={tenant.modulos_liberados ?? []}
+        podeEditar={superAdmin}
+        aoSalvar={fetchTenant}
+      />
 
       {/* Ações e edição: só super admin. O CS consulta a ficha. */}
       {superAdmin ? (<>
@@ -264,9 +284,13 @@ export default function AdminTenantDetailPage() {
                 onChange={e => setEditPlano(e.target.value)}
                 className="w-full bg-[var(--fin-surface)] border border-[var(--fin-border)] text-[var(--fin-text)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--fin-accent)]/50 focus:border-[var(--fin-accent)]"
               >
-                <option value="free">Free</option>
-                <option value="pro">Pro</option>
-                <option value="enterprise">Enterprise</option>
+                {/* Os planos de verdade (planos-do-saas.ts); um plano antigo fora da lista continua escolhível. */}
+                {editPlano && !PLANOS_DO_SAAS.some(p => p.slug === editPlano) ? (
+                  <option value={editPlano}>{editPlano} (plano antigo)</option>
+                ) : null}
+                {PLANOS_DO_SAAS.map(p => (
+                  <option key={p.slug} value={p.slug}>{p.nome}</option>
+                ))}
               </select>
             </div>
 
@@ -330,14 +354,15 @@ function StatusBadge({ status }: { status: string }) {
 
 function PlanBadge({ plano }: { plano: string }) {
   const styles: Record<string, string> = {
-    free: 'bg-[var(--fin-text)]/50 text-[var(--fin-text-3)]',
-    pro: 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]',
-    enterprise: 'bg-[var(--fin-accent)]/15 text-[var(--fin-accent)]',
+    basic: 'bg-[var(--fin-surface-2)] text-[var(--fin-text-2)]',
+    founder: 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]',
+    'founder-pro': 'bg-[var(--fin-violet-soft)] text-[var(--fin-violet)]',
   }
+  const nome = PLANOS_DO_SAAS.find(p => p.slug === plano)?.nome ?? plano
 
   return (
     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${styles[plano] || 'bg-[var(--fin-surface)] text-[var(--fin-text-3)]'}`}>
-      {plano}
+      {nome}
     </span>
   )
 }

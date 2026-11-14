@@ -77,7 +77,7 @@ export function podeNaPlataforma(papel: PapelDaPlataforma | null, acao: AcaoDaPl
 }
 
 /** As telas do painel que aparecem para cada papel (menu e redirecionamento). */
-export const TELAS_DO_CS = ['/admin/dashboard', '/admin/tenants', '/admin/support', '/admin/minha-conta'];
+export const TELAS_DO_CS = ['/admin/dashboard', '/admin/tenants', '/admin/modulos', '/admin/support', '/admin/minha-conta'];
 
 /**
  * O que a sessão do CS pode abrir, conferido no middleware antes de qualquer
@@ -95,12 +95,15 @@ export function csPodeAbrir(pathname: string, method: string): boolean {
   if (casa('/admin') || casa('/admin/dashboard') || casa('/admin/tenants') || casa('/admin/minha-conta')) return leitura;
   if (casa(`/admin/tenants/${id}`) && !casa('/admin/tenants/novo')) return leitura;
   if (casa('/admin/support') || casa(`/admin/support/${id}`)) return leitura;
+  // Módulos da versão completa (14/11/2026): o CS consulta; liberar é do super admin.
+  if (casa('/admin/modulos')) return leitura;
 
   // Rotas
   if (casa('/api/admin/auth/session')) return leitura;
   if (casa('/api/admin/auth/senha')) return m === 'POST';
   if (casa('/api/admin/metrics') || casa('/api/admin/tenants') || casa(`/api/admin/tenants/${id}`)) return leitura;
   if (casa('/api/admin/support/tickets')) return leitura;
+  if (casa('/api/admin/modulos')) return leitura;
   if (casa(`/api/admin/support/tickets/${id}`)) return leitura || m === 'PATCH';
   if (casa(`/api/admin/support/tickets/${id}/messages`)) return m === 'POST';
   // Anexo na resposta do chamado e sair.

@@ -1,9 +1,44 @@
+import { VINCULO_FISCAL_SCHEMA_SQL } from './vinculo-fiscal';
+import { PROPOSTA_LINK_SCHEMA_SQL } from './proposta-publica';
+import { ARQUIVOS_PRIVADOS_SCHEMA_SQL } from './arquivos';
+import { EXTRATO_FITID_UNICO_SQL, EXTRATO_ID_EXTERNO_UNICO_SQL } from './extrato-importacao';
+import { EXTRATO_AUTOMATICO_SCHEMA_SQL } from './extrato-automatico/schema';
 import { AuditPool } from './audit-pool';
 import { getAuditContext, runWithAuditContext, SYSTEM_AUDIT_CONTEXT } from './audit-context';
+import { RAZAO_SCHEMA_SQL } from './razao-schema';
+import { BAIXAS_SCHEMA_SQL } from './baixas-servidor';
+import { PERIODO_SCHEMA_SQL } from './periodo-fechado';
+import { COBRANCA_SCHEMA_SQL } from './cobranca/schema';
+import { MIGRACAO_SCHEMA_SQL } from './migracao/schema';
+import { CAMBIO_SCHEMA_SQL } from './cambio-servidor';
+import { MOEDAS_SCHEMA_SQL } from './moedas-servidor';
+import { VENDA_SCHEMA_SQL } from './venda-schema';
+import { RECIBOS_EMITIDOS_SCHEMA_SQL } from './recibo-emitido';
+import { FORNECEDOR_SCHEMA_SQL } from './fornecedor-schema';
+import { NOTAS_REGRAS_SCHEMA_SQL } from './nota-regras-schema';
+import { COMISSAO_FUNCOES_SCHEMA_SQL } from './comissao-funcoes-schema';
+import { PARTE_D_SCHEMA_SQL } from './cancelamento-schema';
+import { FATURA_SCHEMA_SQL } from './fatura-schema';
+import { EMPRESAS_SCHEMA_SQL } from './empresas-schema';
+import { RECORRENCIA_SCHEMA_SQL } from './recorrencia-schema';
+import { CENTROS_CUSTO_SCHEMA_SQL } from './centros-custo-servidor';
+import { PERMISSOES_SCHEMA_SQL } from './permissoes-schema';
+import { semearPlanos } from './planos-do-saas';
+import { LEITURA_DOCUMENTO_SCHEMA_SQL } from './leitura-documento-servidor';
+import { FORMAS_PAGAMENTO_SCHEMA_SQL } from './formas-pagamento-servidor';
+import { CONTAS_EXCLUIDAS_SCHEMA_SQL } from './contas-excluidas-schema';
+import { NUMERACAO_TITULOS_SCHEMA_SQL } from './numeracao-titulos';
+import { PREFERENCIAS_USUARIO_SCHEMA_SQL } from './preferencias-usuario';
 import { AUDIT_SCHEMA_SQL } from './audit-schema';
 import { NOTIFICACOES_SCHEMA_SQL } from './notificacoes-schema';
 import { MAPAS_MENTAIS_COMPARTILHAMENTO_SCHEMA_SQL } from './mapas-mentais-compartilhamento';
 import { SITES_SCHEMA_SQL } from './sites-schema';
+import { CONCILIACAO_REGRAS_SCHEMA_SQL } from './conciliacao-regras-schema';
+import { CONFERENCIA_OPERADORA_SCHEMA_SQL } from './conferencia-operadora-schema';
+import { RELATORIOS_AGENDADOS_SCHEMA_SQL } from './relatorios-agendados/schema';
+import { PERGUNTAS_IA_SCHEMA_SQL } from './perguntar/uso';
+import { CHEQUES_SCHEMA_SQL } from './cheques-servidor';
+import { aplicarAcertosDaVolta, type BancoDosAcertos } from './volta-acertos';
 
 const pool = process.env.DATABASE_URL
   ? new AuditPool({ connectionString: process.env.DATABASE_URL, max: 5 }, getAuditContext)
@@ -761,7 +796,7 @@ async function executarInitDB() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
-    -- Planos do SaaS (Basic, Founder, Founder Pro). Editaveis no
+    -- Planos do SaaS (Básico, Controle, Escala). Editaveis no
     -- /admin/planos pra ajustar preco/limites/features sem deploy.
     -- slug e a referencia estavel usada em tenants.plano.
     CREATE TABLE IF NOT EXISTS planos (
@@ -901,28 +936,9 @@ async function executarInitDB() {
     CREATE INDEX IF NOT EXISTS idx_assinaturas_trial ON assinaturas(trial_ends_at) WHERE status = 'trial';
   `);
 
-  // Seed dos planos padrao (idempotente — ON CONFLICT DO NOTHING).
-  // Precos sao PLACEHOLDERS que o user edita em /admin/planos.
-  await pool.query(`
-    INSERT INTO planos (id, slug, nome, descricao, preco_mensal, preco_anual, moeda, destaque, ordem, ativo, limites, features)
-    VALUES
-      ('plano-basic', 'basic', 'Basic', 'Para agências que estão começando.',
-        97, 970, 'BRL', FALSE, 1, TRUE,
-        '{"usuarios": 3, "propostas_mes": 50, "grupos": 10, "ai_enabled": false, "white_label": false}'::jsonb,
-        '["Até 3 usuários", "50 propostas/mês", "Hub de viagens", "Templates prontos", "Suporte por email"]'::jsonb
-      ),
-      ('plano-founder', 'founder', 'Founder', 'Para agências em crescimento que precisam de mais ferramentas.',
-        197, 1970, 'BRL', TRUE, 2, TRUE,
-        '{"usuarios": 10, "propostas_mes": 200, "grupos": 50, "ai_enabled": true, "white_label": false}'::jsonb,
-        '["Até 10 usuários", "200 propostas/mês", "Geração com IA (Claude)", "CRM completo", "Funis e campanhas", "API de hotéis e voos", "Suporte prioritário"]'::jsonb
-      ),
-      ('plano-founder-pro', 'founder-pro', 'Founder Pro', 'Para agências consolidadas com alto volume e necessidade de white-label.',
-        397, 3970, 'BRL', FALSE, 3, TRUE,
-        '{"usuarios": -1, "propostas_mes": -1, "grupos": -1, "ai_enabled": true, "white_label": true}'::jsonb,
-        '["Usuários ilimitados", "Propostas ilimitadas", "Geração com IA (Claude)", "CRM completo + automações", "White-label completo", "Suporte dedicado", "Onboarding 1-a-1"]'::jsonb
-      )
-    ON CONFLICT (id) DO NOTHING;
-  `);
+  // Planos padrao (Básico, Controle, Escala) e a troca dos nomes antigos:
+  // src/lib/planos-do-saas.ts. Idempotente; preco editado em /admin/planos fica.
+  await semearPlanos(pool);
 
   // Seed default login_campanha — vazio inicialmente. Super admin
   // edita em /admin/marketing.
@@ -1212,6 +1228,22 @@ async function executarInitDB() {
     CREATE INDEX IF NOT EXISTS idx_planejamento_progresso_tenant_mes ON planejamento_progresso(tenant_id, mes);
   `);
 
+  // Metas de MRR (04/11/2026), só na conta do ecossistema (comissao-mrr.ts):
+  // cada meta do mês com os produtos do CRM vinculados e o valor de cada
+  // vendedor. Tabela própria: as metas de venda de viagem (tabela metas) são
+  // por vendedor e medem faturamento; estas são por meta e medem MRR.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS metas_mrr (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      mes TEXT NOT NULL,
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_metas_mrr_tenant_mes ON metas_mrr(tenant_id, mes);
+  `);
+
   // O domínio personalizado de propostas foi removido do produto, e com ele o
   // índice único que garantia um domínio por agência. O POST de /api/agencia
   // descarta o campo na gravação, então o valor órfão some do documento no
@@ -1471,6 +1503,125 @@ async function executarInitDB() {
   // Links opacos e revogáveis de visualização/cópia de mapas mentais.
   await pool.query(MAPAS_MENTAIS_COMPARTILHAMENTO_SCHEMA_SQL);
   await pool.query(SITES_SCHEMA_SQL);
+  // Perfil explícito para quem entra no sistema (FIN-15). Até aqui, perfil
+  // ausente ou desconhecido valia OPERADOR; agora vale "sem acesso". Quem tem
+  // senha e trabalhava assim fica gravado como OPERADOR, o mesmo acesso que
+  // já tinha. Quem não tem senha (cadastro vindo do CRM) continua sem acesso.
+  await pool.query(`
+    UPDATE usuarios
+       SET data = jsonb_set(data, '{perfil}', '"OPERADOR"', true), updated_at = NOW()
+     WHERE COALESCE(data->>'senha_hash', '') <> ''
+       AND COALESCE(data->>'perfil', '') NOT IN
+           ('ADMIN','owner','OPERADOR','VENDEDOR','COLABORADOR','GERENTE','FINANCEIRO','VISUALIZADOR')
+  `);
+  // Dono único de cada empresa no emissor de notas (FIN-02).
+  await pool.query(VINCULO_FISCAL_SCHEMA_SQL);
+  // Auditoria de 04/11/2026, Entrega B: link público da proposta por token
+  // (FIN-13), documentos privados por agência (FIN-08) e a mesma transação
+  // bancária uma vez só por conta (FIN2-20).
+  await pool.query(PROPOSTA_LINK_SCHEMA_SQL);
+  await pool.query(ARQUIVOS_PRIVADOS_SCHEMA_SQL);
+  await pool.query(EXTRATO_FITID_UNICO_SQL);
+  // Recorrência (05/11/2026): séries de contas e as chaves que impedem a
+  // mesma ocorrência ou a mesma cópia de mês de nascer duas vezes.
+  await pool.query(RECORRENCIA_SCHEMA_SQL);
+  // Regras de rateio e centros de custo vindos dos textos livres
+  // (05/11/2026). Migração única, marcada em marcos_de_migracao.
+  await pool.query(CENTROS_CUSTO_SCHEMA_SQL);
+  // Perfis de acesso, restrição por conta, pedidos de aprovação e alçadas
+  // (05/11/2026). Tabelas vazias = o papel decide como antes.
+  await pool.query(PERMISSOES_SCHEMA_SQL);
+  // "Ler boleto ou nota" (05/11/2026): a leitura por IA guardada por
+  // arquivo (hash), para o mesmo arquivo não pagar duas vezes. Controle: fora
+  // do gatilho de auditoria (a leitura registra o próprio evento).
+  await pool.query(LEITURA_DOCUMENTO_SCHEMA_SQL);
+  // Formas de pagamento (05/11/2026): só o que a agência ajustou ou criou.
+  // Tabela vazia = as formas de sempre, como antes.
+  await pool.query(FORMAS_PAGAMENTO_SCHEMA_SQL);
+  // Razão financeiro, agendador e fila de tarefas (05/11/2026). Antes da
+  // auditoria: são tabelas imutáveis ou de controle e ficam fora do gatilho.
+  // Histórico de baixas e trava de período (05/11/2026, E2).
+  await pool.query(BAIXAS_SCHEMA_SQL);
+  await pool.query(PERIODO_SCHEMA_SQL);
+  // Cobrança pelo Asaas/Pagar.me da agência (05/11/2026, E3): cobranças,
+  // histórico, portal do cliente, régua e disjuntor. Antes do razão e da
+  // auditoria (as tabelas de controle ficam fora do gatilho).
+  await pool.query(COBRANCA_SCHEMA_SQL);
+  // Mudança do sistema anterior (05/11/2026, E4): lotes, arquivos, linhas e
+  // vínculos origem → registro. Tabelas de controle, fora da auditoria.
+  await pool.query(MIGRACAO_SCHEMA_SQL);
+  // Câmbio e índices (05/11/2026, E6): cache global de cotações, estado das
+  // fontes, cofre do Super Admin, variações cambiais e a trava da moeda da
+  // conta bancária. Antes do razão e da auditoria.
+  await pool.query(CAMBIO_SCHEMA_SQL);
+  // Cadastro de moedas da agência (06/11/2026, E7 frente D): as que ela
+  // acrescenta às oito do sistema. Cadastro: entra na auditoria.
+  await pool.query(MOEDAS_SCHEMA_SQL);
+  // Venda completa (05/11/2026, E5): produtos, passageiros, componentes de
+  // receita, pagamentos por forma, pendências e o histórico da venda. Antes
+  // do razão e da auditoria (o histórico fica fora do gatilho).
+  await pool.query(VENDA_SCHEMA_SQL);
+  // Recibos da venda emitidos (E7): número e versão; a edição da venda com
+  // recibo emitido pede confirmação e o recibo novo substitui o anterior.
+  await pool.query(RECIBOS_EMITIDOS_SCHEMA_SQL);
+  // Lado do fornecedor (05/11/2026, E5 parte C): acordos com vigência, fatura
+  // do fornecedor, sinal e comissão informada no extrato. Antes do razão e da
+  // auditoria (as tabelas são auditadas).
+  await pool.query(FORNECEDOR_SCHEMA_SQL);
+  // Notas por regra e retenções na fonte (05/11/2026, E5 parte E): regras da
+  // nota, retenções por cliente × produto e a chave única da nota gerada.
+  await pool.query(NOTAS_REGRAS_SCHEMA_SQL);
+  // Comissões por função (05/11/2026, E5 parte F): funções, planos em matriz,
+  // metas, o cálculo do dia, fechamentos e pagamentos. Antes da auditoria.
+  await pool.query(COMISSAO_FUNCOES_SCHEMA_SQL);
+  // Cancelamento, reembolsos e carteira de crédito do cliente (E5, parte D).
+  // O extrato do crédito é imutável e fica fora da auditoria.
+  await pool.query(PARTE_D_SCHEMA_SQL);
+  // Faturas ao cliente e Regras de faturamento (05/11/2026, E5 parte B).
+  // Antes do razão e da auditoria (o histórico da fatura fica fora do gatilho).
+  await pool.query(FATURA_SCHEMA_SQL);
+  // Várias empresas dentro da agência (06/11/2026, E7 G2): cadastro, seletor
+  // por usuário, configurações por empresa, empresa nos perfis de acesso e o
+  // gatilho que põe `empresa_id` em todo título, conta, cartão, venda, nota,
+  // fatura e cobrança. Migração única: tudo de antes na empresa principal.
+  // Depois das permissões, da cobrança, das notas e das faturas; antes do
+  // razão e da auditoria.
+  await pool.query(EMPRESAS_SCHEMA_SQL);
+  // Conciliação com regras aprendidas e conferência do extrato de operadora
+  // (05/11/2026, E6). A lista "conciliado sozinho" e as linhas da conferência
+  // são controle e ficam fora do gatilho de auditoria.
+  await pool.query(CONCILIACAO_REGRAS_SCHEMA_SQL);
+  await pool.query(CONFERENCIA_OPERADORA_SCHEMA_SQL);
+  // Extrato automático pela API do banco da agência (06/11/2026, E6 parte
+  // B): conexão por conta, segredo cifrado à parte e histórico de leituras;
+  // o identificador do banco deduplica no mesmo lugar do FITID.
+  await pool.query(EXTRATO_AUTOMATICO_SCHEMA_SQL);
+  await pool.query(EXTRATO_ID_EXTERNO_UNICO_SQL);
+  // Fechamento de paridade (06/11/2026, E7): contas excluídas (exclusão
+  // lógica, com Restaurar), o Nº sequencial dos títulos por agência e as
+  // preferências por usuário (colunas da lista). Controle: fora da auditoria.
+  await pool.query(CONTAS_EXCLUIDAS_SCHEMA_SQL);
+  await pool.query(NUMERACAO_TITULOS_SCHEMA_SQL);
+  await pool.query(PREFERENCIAS_USUARIO_SCHEMA_SQL);
+  // Envio agendado de relatório e link de leitura (E7, G3): agendamentos
+  // (auditados), cópias lidas pelo link e histórico dos envios (controle).
+  await pool.query(RELATORIOS_AGENDADOS_SCHEMA_SQL);
+  // Perguntar em texto (E7, fechamento): limite por agência e registro das
+  // perguntas. Controle: fora da auditoria por linha.
+  await pool.query(PERGUNTAS_IA_SCHEMA_SQL);
+  // Cheques emitidos (E7, frente C): o talão da agência, a situação de cada
+  // cheque e as liquidações pagas com ele. Auditadas.
+  await pool.query(CHEQUES_SCHEMA_SQL);
+  await pool.query(RAZAO_SCHEMA_SQL);
+  // Acertos da volta da versão completa (14/11/2026): gatilho de auditoria
+  // que a versão simples pôs nas tabelas de controle, link antigo das
+  // propostas criadas sem token e a reabertura do razão de todas as agências
+  // (a diferença de 12/11 até a publicação vai para a revisão, nunca para o
+  // saldo). Cada um com marco próprio; nunca derruba o boot.
+  {
+    const resumo = await aplicarAcertosDaVolta(pool as unknown as BancoDosAcertos);
+    if (resumo.erros.length) console.error('[volta-acertos]', resumo.erros.join(' | '));
+  }
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);
   initialized = true;
@@ -1483,6 +1634,15 @@ async function executarInitDB() {
     .catch(e => console.error('[revisao-hotmart]', e instanceof Error ? e.message : e));
   // Mesma ideia para o Pagar.me (08/10/2026): pedido e cobrança duplicados,
   // venda antecipada em 12 contas e venda do CRM que não se ligou.
+  // Token público para as propostas anteriores ao link por token. Em segundo
+  // plano e em lotes: o link antigo pelo id continua valendo 180 dias.
+  void import('./proposta-publica')
+    .then(async m => {
+      for (let i = 0; i < 200; i++) {
+        if (!pool || (await m.garantirLinksPendentes(pool as unknown as import('./proposta-publica').Consulta)) === 0) break;
+      }
+    })
+    .catch(e => console.error('[proposta-link]', e instanceof Error ? e.message : e));
   void import('./plataformas/revisao-pagarme')
     .then(m => m.revisarPagarmeUmaVez())
     .catch(e => console.error('[revisao-pagarme]', e instanceof Error ? e.message : e));

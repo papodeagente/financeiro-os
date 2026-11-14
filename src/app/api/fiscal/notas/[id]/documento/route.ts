@@ -46,7 +46,8 @@ export async function GET(
       );
     }
 
-    const config = await carregarConfigFiscal(tenantId);
+    // A nota sai pelo emissor da empresa dela (E7).
+    const config = await carregarConfigFiscal(tenantId, String((nota as unknown as Record<string, unknown>).empresa_id ?? ''));
     const doc = await baixarDocumentoNota(nota.protocolo || nota.id, tipo, config);
 
     // Nome que a pessoa reconhece na pasta de downloads.

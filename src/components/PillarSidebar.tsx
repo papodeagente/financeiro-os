@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useActivePillar, PILLARS as PILARES_DO_MENU, type Pillar } from '@/hooks/useActivePillar';
+import { useAuth } from '@/contexts/AuthContext';
 
 /** Mesma tabela da barra de cima: a gaveta e o topo abrem a mesma porta. */
 const ROTA_DO_PILAR: Record<Pillar, string> = {
@@ -11,137 +12,14 @@ const ROTA_DO_PILAR: Record<Pillar, string> = {
   financeiro: '/financeiro-ag',
   configuracoes: '/config/agencia',
 };
-import {
-  Wallet,
-  Wallet2,
-  ShoppingBag,
-  LayoutDashboard, Medal, Percent, Settings, UserCheck,
-  Receipt, CreditCard,
-  Landmark, ArrowRightLeft,
-  Building2, Link2,
-  GitBranch as MindIcon,
-  Users, ClipboardList,
-  PanelLeftClose, PanelLeftOpen,
-  Eraser, LifeBuoy, FileText,
-  LayoutGrid, ChartColumn, ArrowDownLeft, ArrowUpRight, GitCompareArrows, ListTree,
-  Contact, Truck,
-} from 'lucide-react';
-import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { PILLAR_MENUS, type SidebarItem, type SidebarSection } from '@/components/menu-dos-pilares';
+import { menuDaConta } from '@/lib/menu-por-modulo';
+import { useModulos } from '@/components/useModulos';
 
-export interface SidebarItem {
-  key: string;
-  label: string;
-  icon: ComponentType<{ className?: string }>;
-  href: string;
-}
-
-export interface SidebarSection {
-  title?: string;
-  items: SidebarItem[];
-}
-
-const PLANEJAMENTO_MENU: SidebarSection[] = [
-  {
-    title: 'Planejamento',
-    items: [
-      { key: 'custos-negocio', label: 'Custos do negócio', icon: Wallet, href: '/planejamento/custos' },
-      { key: 'mapas-mentais', label: 'Mapa mental', icon: MindIcon, href: '/planejamento/mapas-mentais' },
-    ],
-  },
-];
-
-const METAS_MENU: SidebarSection[] = [
-  {
-    title: 'Visão geral',
-    items: [
-      { key: 'dashboard-kpi', label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
-      { key: 'metas-ranking', label: 'Metas da equipe', icon: Medal, href: '/equipe/metas' },
-    ],
-  },
-  {
-    title: 'Equipe',
-    items: [
-      { key: 'comissoes', label: 'Comissões', icon: Percent, href: '/equipe/comissoes' },
-      { key: 'vendedores', label: 'Vendedores e planos', icon: UserCheck, href: '/equipe/vendedores' },
-      { key: 'folha', label: 'Folha', icon: Wallet2, href: '/equipe/folha' },
-      { key: 'planos-comissao', label: 'Planos de comissão', icon: Settings, href: '/equipe/planos-comissao' },
-    ],
-  },
-];
-
-// Menu do Financeiro simplificado (protótipo aprovado pelo Bruno, 08/10/2026):
-// o que se olha, o que se faz no dia a dia e o que se cadastra uma vez.
-// Recebimentos das plataformas, vendas e relatórios saíram do menu e
-// continuam na busca (⌘K) e nos atalhos de cada tela: a visão geral leva aos
-// recebimentos para conferir, a conta a receber leva ao cliente e à venda.
-// Clientes e fornecedores voltaram em Cadastros (Bruno, 09/10/2026): é onde se
-// confere o que veio do CRM.
-const FINANCEIRO_MENU: SidebarSection[] = [
-  {
-    title: 'Visão geral',
-    items: [
-      { key: 'fin-hub', label: 'Visão geral', icon: LayoutGrid, href: '/financeiro-ag' },
-      { key: 'fluxo-caixa', label: 'Fluxo de caixa', icon: ChartColumn, href: '/financeiro-ag/fluxo-caixa' },
-      { key: 'dre', label: 'Resultado do mês', icon: FileText, href: '/financeiro-ag/dre' },
-    ],
-  },
-  {
-    title: 'Dia a dia',
-    items: [
-      { key: 'receber', label: 'Contas a receber', icon: ArrowDownLeft, href: '/financeiro-ag/receber' },
-      { key: 'pagar', label: 'Contas a pagar', icon: ArrowUpRight, href: '/financeiro-ag/pagar' },
-      { key: 'conciliacao', label: 'Conciliação', icon: GitCompareArrows, href: '/financeiro-ag/conciliacao' },
-      { key: 'notas-fiscais', label: 'Notas fiscais', icon: Receipt, href: '/financeiro-ag/notas' },
-      { key: 'transferencias', label: 'Transferências', icon: ArrowRightLeft, href: '/financeiro-ag/transferencias' },
-    ],
-  },
-  {
-    title: 'Cadastros',
-    items: [
-      { key: 'clientes', label: 'Clientes', icon: Contact, href: '/pessoas/clientes' },
-      { key: 'fornecedores', label: 'Fornecedores', icon: Truck, href: '/pessoas/fornecedores' },
-      { key: 'contas-bancarias', label: 'Contas bancárias', icon: Landmark, href: '/financeiro-ag/contas-bancarias' },
-      { key: 'cartoes-corp', label: 'Cartões', icon: CreditCard, href: '/financeiro-ag/cartoes' },
-      { key: 'plano-contas', label: 'Categorias', icon: ListTree, href: '/financeiro-ag/plano-contas' },
-    ],
-  },
-];
-
-const CONFIGURACOES_MENU: SidebarSection[] = [
-  {
-    title: 'Geral',
-    items: [
-      { key: 'cfg-agencia', label: 'Dados da agência', icon: Building2, href: '/config/agencia' },
-      { key: 'cfg-usuarios', label: 'Usuários', icon: Users, href: '/config/usuarios' },
-    ],
-  },
-  {
-    title: 'Integrações',
-    items: [
-      // Uma entrada só. CRM, nota fiscal e IA estão dentro, cada um com a
-      // sua página — três linhas de menu para três telas parecidas era o
-      // que fazia ninguém achar nada.
-      { key: 'cfg-plataformas', label: 'Plataformas de venda', icon: ShoppingBag, href: '/config/plataformas' },
-      { key: 'cfg-integracoes', label: 'Integrações', icon: Link2, href: '/config/integracoes' },
-    ],
-  },
-  {
-    title: 'Sistema',
-    items: [
-      { key: 'cfg-suporte', label: 'Suporte', icon: LifeBuoy, href: '/suporte' },
-      { key: 'cfg-auditoria', label: 'Auditoria', icon: ClipboardList, href: '/config/auditoria' },
-      { key: 'cfg-reset', label: 'Resetar dados', icon: Eraser, href: '/config/reset' },
-    ],
-  },
-];
-
-export const PILLAR_MENUS: Record<Pillar, SidebarSection[]> = {
-  planejamento: PLANEJAMENTO_MENU,
-  metas: METAS_MENU,
-  financeiro: FINANCEIRO_MENU,
-  configuracoes: CONFIGURACOES_MENU,
-};
+export { PILLAR_MENUS };
+export type { SidebarItem, SidebarSection };
 
 interface PillarSidebarProps {
   collapsed?: boolean;
@@ -167,10 +45,15 @@ const PAI_NO_MENU: Array<[string, string]> = [
 export function PillarSidebar({ collapsed = false, onToggle, comSeletorDePilar = false }: PillarSidebarProps) {
   const pathname = usePathname();
   const activePillar = useActivePillar();
+  const { user } = useAuth();
+  const modulos = useModulos();
 
   if (!activePillar) return null;
 
-  const sections = PILLAR_MENUS[activePillar];
+  // Versão e módulos da agência (menu-por-modulo.ts): a agência simples vê o
+  // menu de sempre; cada módulo liberado acrescenta os itens dele.
+  const ecossistema = user?.tenantPerfil === 'ecossistema';
+  const sections = menuDaConta(PILLAR_MENUS[activePillar], { modulos, ecossistema });
 
   // Um item ativo só: o MAIS ESPECÍFICO que casa com a rota. Antes era
   // "casa por prefixo", e em /financeiro-ag/receber acendiam juntos

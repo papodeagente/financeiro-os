@@ -4,6 +4,7 @@ import { getTenantId } from '@/lib/tenant';
 import { getSession } from '@/lib/auth';
 import { bloqueioFinanceiro } from '@/lib/permissoes';
 import { importarExtrato, type LinhaImportada } from '@/lib/extrato-importacao';
+import { recusaAcao } from '@/lib/guarda-rota';
 
 /**
  * Importa um extrato inteiro numa única transação.
@@ -37,6 +38,9 @@ export async function POST(req: Request) {
   const linhas: LinhaImportada[] = Array.isArray(body?.linhas) ? (body.linhas as LinhaImportada[]) : [];
 
   if (!contaId) return NextResponse.json({ error: 'conta_bancaria_id é obrigatório' }, { status: 400 });
+  // Conta não liberada por perfil de acesso não recebe extrato (05/11/2026).
+  const recusaConta = await recusaAcao('conciliar', { contaBancariaId: contaId });
+  if (recusaConta) return recusaConta;
   if (linhas.length === 0) return NextResponse.json({ inseridas: 0, duplicadas: 0, total: 0 });
   if (!pool) return NextResponse.json({ inseridas: 0, duplicadas: 0, total: linhas.length });
   const db = pool;

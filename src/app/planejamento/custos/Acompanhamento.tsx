@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowDownLeft, ArrowUpRight, ChartColumn, CircleCheck, Gauge, Megaphone, Percent, Plus, Scale,
-  ShoppingBag, Trash2, TrendingDown, TrendingUp, TriangleAlert, Users, type LucideIcon,
+  ArrowDownLeft, ArrowRight, ArrowUpRight, ChartLine, ChartColumn, CircleCheck, Gauge, Megaphone, Percent, Plus, Scale,
+  ShoppingBag, Target, Trash2, TrendingDown, TrendingUp, TriangleAlert, Users, Wallet, type LucideIcon,
 } from 'lucide-react';
 
 import type { CustosData, Relatorio } from '@/lib/planejamento-custos';
 import {
-  montarAcompanhamento, ultimoRegistro,
-  type ContaDoMes, type IndicadorDoPlano, type ItemDoPlano, type PontoDeAtencao, type RealizadoDoMes, type Situacao,
+  metricasDoCrm, montarAcompanhamento, ritmoDoPlano, ultimoRegistro,
+  type AreaDoPlano, type Calendario, type ContaDoMes, type IndicadorDoPlano, type ItemDoPlano, type PontoDeAtencao, type RealizadoDoMes, type Situacao,
 } from '@/lib/plano-do-mes';
 import { cn, formatBRL } from '@/lib/utils';
 import { hojeISO } from '@/lib/money';
@@ -18,28 +18,32 @@ import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/fin/Callout';
 import { DataState } from '@/components/fin/DataState';
 import { Field } from '@/components/fin/Field';
-import { FinTable, type FinColuna } from '@/components/fin/FinTable';
-import { Meter, type Faixa } from '@/components/fin/Meter';
-import { MetricCard } from '@/components/fin/MetricCard';
-import { Money } from '@/components/fin/Money';
 import { RecordSheet } from '@/components/fin/RecordSheet';
-import { Resposta, type TomDoChip } from '@/components/fin/Resposta';
-import { StatusChip, rotuloStatus } from '@/components/fin/StatusChip';
+import { rotuloStatus, toneStatus } from '@/components/fin/StatusChip';
+import {
+  BarraDoTom, baldes, CabecaDoBloco, CARTAO_DO_PAINEL, CartaoDeNumero, SeloDoTom, TituloDeSecao,
+  type NumeroDoPainel, type TomDoPainel,
+} from '@/components/fin/PecasDoPainel';
+import { RitmoDoMes } from './RitmoDoMes';
 
-const CARTAO = 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]';
 const CAMPO = 'fin-t-body h-11 w-full rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-3 text-[var(--fin-text)] lg:h-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)]';
 
-const ICONE: Record<PontoDeAtencao['chave'], LucideIcon> = {
+const ICONE_DA_AREA: Record<AreaDoPlano['id'], LucideIcon> = {
+  comercial: Target, receita: ArrowDownLeft, custos: ArrowUpRight, resultado: Scale,
+};
+const TOM_DA_AREA: Record<AreaDoPlano['id'], TomDoPainel> = {
+  comercial: 'acento', receita: 'positivo', custos: 'aviso', resultado: 'info',
+};
+const SOBRE_A_AREA: Record<AreaDoPlano['id'], string> = {
+  comercial: 'Vendas e atendimentos contra o ritmo do mês',
+  receita: 'O que entrou para a agência e o volume vendido',
+  custos: 'O que foi lançado e pago nas contas a pagar do mês',
+  resultado: 'Se as vendas já pagaram a estrutura, e o que sobrou',
+};
+const ICONE_DO_PONTO: Record<PontoDeAtencao['chave'], LucideIcon> = {
   vendas: ShoppingBag, atendimentos: Users, faturamento: ChartColumn, comissao: ArrowDownLeft,
   custos_fixos: ArrowUpRight, marketing: Megaphone, custos_variaveis: Percent, equilibrio: Scale,
   lucro: TrendingUp, indicador: Gauge,
-};
-
-const SOBRE_A_AREA: Record<string, string> = {
-  comercial: 'Vendas e atendimentos, contra o ritmo do mês.',
-  receita: 'O que entrou para a agência e o volume vendido.',
-  custos: 'O que foi lançado e pago nas contas a pagar do mês.',
-  resultado: 'Se as vendas já pagaram a estrutura, e o que sobrou.',
 };
 
 function valor(v: number | null, formato: ItemDoPlano['formato']): string {
@@ -47,33 +51,49 @@ function valor(v: number | null, formato: ItemDoPlano['formato']): string {
   return formato === 'dinheiro' ? formatBRL(v) : v.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
 }
 
+/** O número grande do cartão: reais inteiros (os centavos ficam na dica). */
+function reais(v: number): string {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0, minimumFractionDigits: 0 });
+}
+
 function dataBR(iso: string): string {
   const [a, m, d] = iso.split('-');
   return a && m && d ? `${d}/${m}` : iso;
 }
 
-/** A cor da barra. Em custo ela mede o PAGO: o atraso fica no selo e na lista de vencidas. */
-function faixaDoItem(item: ItemDoPlano): Faixa {
-  if (item.sentido === 'limitar') return item.situacao === 'acima' ? 'atencao' : 'saudavel';
-  return item.situacao === 'atrasado' ? 'critico' : 'saudavel';
+/** O tom da situação vem do dicionário único (StatusChip, domínio 'plano'). */
+function tomDaSituacao(s: Situacao | 'em_linha' | 'abaixo'): TomDoPainel {
+  const t = toneStatus('plano', s);
+  return t === 'positivo' ? 'positivo' : t === 'negativo' ? 'negativo' : t === 'aviso' ? 'aviso' : t === 'info' ? 'acento' : 'neutro';
 }
 
-function tomDoChip(s: Situacao): TomDoChip {
-  if (s === 'concluido') return 'positivo';
-  if (s === 'atrasado') return 'negativo';
-  if (s === 'acima') return 'aviso';
-  return 'neutro';
+/** A cor da barra: em custo ela mede o PAGO (o atraso fica no selo e na lista de vencidas). */
+function tomDaBarra(item: ItemDoPlano): TomDoPainel {
+  if (item.sentido === 'limitar') return item.situacao === 'acima' ? 'aviso' : item.situacao === 'concluido' ? 'positivo' : 'acento';
+  return item.situacao === 'atrasado' ? 'negativo' : item.situacao === 'concluido' ? 'positivo' : 'acento';
 }
 
-/** Onde o ritmo pedia estar, no número do item ("o ritmo pedia 8"). */
-function esperadoDoItem(item: ItemDoPlano): string | null {
-  if (item.esperadoPct === null || item.planejado === null) return null;
-  const bruto = (item.planejado * item.esperadoPct) / 100;
-  return valor(item.formato === 'contagem' ? Math.round(bruto) : bruto, item.formato);
+function SeloDaSituacao({ s }: { s: Situacao }) {
+  return <SeloDoTom tom={tomDaSituacao(s)}>{rotuloStatus('plano', s)}</SeloDoTom>;
+}
+
+/** "22% do plano", com seta para baixo quando está atrás do ritmo. */
+function seloDoPlano(item: ItemDoPlano): NumeroDoPainel['selo'] {
+  if (item.progresso === null) {
+    return item.situacao === 'sem_dados' || item.situacao === 'sem_meta'
+      ? { tom: 'neutro', texto: rotuloStatus('plano', item.situacao) }
+      : null;
+  }
+  return {
+    tom: tomDaSituacao(item.situacao),
+    texto: `${Math.round(item.progresso).toLocaleString('pt-BR')}% do plano`,
+    seta: item.situacao === 'atrasado' ? 'desce' : item.situacao === 'concluido' || item.situacao === 'pendente' ? 'sobe' : undefined,
+    dica: item.porque,
+  };
 }
 
 // ============================================================
-// Um item do plano
+// Um item da área
 // ============================================================
 
 function ListaDeContas({ titulo, contas, vencidas }: { titulo: string; contas: ContaDoMes[]; vencidas?: boolean }) {
@@ -104,111 +124,129 @@ function LinhaDoItem({ item, registros, podeEditar, onRegistrar, onApagarRegistr
   const limitar = item.sentido === 'limitar';
   const porVenda = item.chave === 'custos_variaveis';
   const temContas = !!item.contas && (item.contas.vencidas.length > 0 || item.contas.aVencer.length > 0);
-  const esperado = esperadoDoItem(item);
-  const descricaoDaBarra = limitar
-    ? `${valor(item.realizado, item.formato)} pagos de ${valor(item.planejado, item.formato)} planejados.`
-    : `${valor(item.realizado, item.formato)} de ${valor(item.planejado, item.formato)}.${esperado ? ` O ritmo pedia ${esperado} até agora.` : ''}`;
+
+  // Sem dados com número (o lucro sem custos lançados): o número aparece, como no cartão do topo.
+  const numeros = item.situacao === 'sem_dados' && item.realizado === null
+    ? 'sem dados'
+    : porVenda
+      ? `${valor(item.realizado, item.formato)} por venda · plano ${valor(item.planejado, item.formato)}`
+      : item.planejado === null
+        ? valor(item.realizado, item.formato)
+        : `${valor(item.realizado, item.formato)} ${limitar ? 'pagos ' : ''}de ${valor(item.planejado, item.formato)}`;
+
+  const sub = (
+    <>
+      <span className="text-[var(--fin-text-2)]">{item.porque}</span>
+      {item.chave === 'vendas' || item.chave === 'atendimentos' ? <span>· {item.fonte}</span> : null}
+      {!porVenda && item.falta !== null && item.falta > 0 ? (
+        <span>· {limitar ? 'falta pagar' : 'faltam'} <b className="font-medium tabular-nums text-[var(--fin-text-2)]">{valor(item.falta, item.formato)}</b></span>
+      ) : null}
+    </>
+  );
 
   return (
-    <li className="flex flex-col gap-[var(--fin-s-3)] px-[var(--fin-s-5)] py-[var(--fin-s-4)]">
-      <div className="flex items-start justify-between gap-[var(--fin-s-3)]">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <h3 className="fin-t-body-strong text-[var(--fin-text)]">{item.titulo}</h3>
-          <p className="fin-t-caption text-[var(--fin-text-2)]">{item.porque}</p>
-        </div>
-        <StatusChip dominio="plano" valor={item.situacao} />
-      </div>
+    <li className="flex flex-col gap-[var(--fin-s-2)]">
+      <BarraDoTom
+        tom={tomDaBarra(item)}
+        nome={item.titulo}
+        numeros={numeros}
+        selo={<SeloDaSituacao s={item.situacao} />}
+        pct={porVenda ? null : item.progresso}
+        marca={item.esperadoPct !== null ? { pct: item.esperadoPct, rotulo: 'Onde o plano pedia estar hoje' } : null}
+        sub={sub}
+      >
+        <div className="flex flex-col gap-[var(--fin-s-2)]">
+          {temContas ? (
+            <div className="grid grid-cols-1 gap-[var(--fin-s-3)] rounded-[12px] bg-[var(--fin-surface-sunken)] px-[var(--fin-s-3)] py-[var(--fin-s-2)] sm:grid-cols-2">
+              <ListaDeContas titulo={`Vencidas (${item.contas!.vencidas.length})`} contas={item.contas!.vencidas} vencidas />
+              <ListaDeContas titulo={`A vencer (${item.contas!.aVencer.length})`} contas={item.contas!.aVencer} />
+            </div>
+          ) : null}
 
-      <dl className="grid grid-cols-3 gap-[var(--fin-s-3)]">
-        <div className="min-w-0">
-          <dt className="fin-t-caption text-[var(--fin-text-3)]">{limitar ? 'Teto planejado' : 'Planejado'}</dt>
-          <dd className="fin-t-body tabular-nums text-[var(--fin-text)]">{valor(item.planejado, item.formato)}</dd>
-        </div>
-        <div className="min-w-0">
-          <dt className="fin-t-caption text-[var(--fin-text-3)]">{item.contas ? 'Pago' : 'Realizado'}</dt>
-          <dd className="fin-t-body-strong tabular-nums text-[var(--fin-text)]">{item.situacao === 'sem_dados' ? 'Sem dados' : valor(item.realizado, item.formato)}</dd>
-        </div>
-        <div className="min-w-0">
-          <dt className="fin-t-caption text-[var(--fin-text-3)]">{porVenda ? 'Diferença' : limitar ? 'Falta pagar' : 'Falta'}</dt>
-          <dd className="fin-t-body tabular-nums text-[var(--fin-text)]">
-            {porVenda
-              ? (item.realizado === null || item.planejado === null
-                ? '—'
-                : `${item.realizado >= item.planejado ? '+' : '−'}${formatBRL(Math.abs(item.realizado - item.planejado))}`)
-              : item.falta === null ? '—' : item.falta === 0 ? 'Nada' : valor(item.falta, item.formato)}
-          </dd>
-        </div>
-      </dl>
+          {registros && registros.length > 0 ? (
+            <ul className="flex flex-col rounded-[12px] bg-[var(--fin-surface-sunken)] px-[var(--fin-s-3)] py-[var(--fin-s-1)]" aria-label="Registros de atendimentos">
+              {registros.slice(0, 5).map(r => (
+                <li key={r.id} className="flex items-center justify-between gap-[var(--fin-s-2)]">
+                  <span className="fin-t-caption min-w-0 truncate text-[var(--fin-text-2)]">
+                    <b className="font-semibold tabular-nums text-[var(--fin-text)]">{r.valor}</b> até {dataBR(r.data)}
+                    {r.autor ? `, ${r.autor}` : ''}{r.observacao ? `: ${r.observacao}` : ''}
+                  </span>
+                  {podeEditar && onApagarRegistro ? (
+                    <Button variant="ghost" size="icon-sm" onClick={() => onApagarRegistro(r.id)} aria-label={`Apagar o registro de ${r.valor} atendimentos em ${dataBR(r.data)}`}>
+                      <Trash2 aria-hidden="true" />
+                    </Button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
 
-      {item.progresso !== null && !porVenda ? (
-        <Meter
-          pct={item.progresso}
-          faixa={faixaDoItem(item)}
-          rotulo={limitar ? 'Pago do planejado' : 'Do planejado'}
-          descricao={descricaoDaBarra}
-          size="sm"
-          marca={item.esperadoPct !== null ? { pct: item.esperadoPct, rotulo: 'Onde o plano pedia estar hoje' } : null}
-        />
-      ) : null}
-
-      {temContas ? (
-        <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-2">
-          <ListaDeContas titulo={`Vencidas (${item.contas!.vencidas.length})`} contas={item.contas!.vencidas} vencidas />
-          <ListaDeContas titulo={`A vencer (${item.contas!.aVencer.length})`} contas={item.contas!.aVencer} />
-        </div>
-      ) : null}
-
-      {registros && registros.length > 0 ? (
-        <ul className="flex flex-col rounded-[var(--fin-r-md)] bg-[var(--fin-surface-sunken)] px-[var(--fin-s-3)] py-[var(--fin-s-1)]" aria-label="Registros de atendimentos">
-          {registros.slice(0, 5).map(r => (
-            <li key={r.id} className="flex items-center justify-between gap-[var(--fin-s-2)]">
-              <span className="fin-t-caption min-w-0 truncate text-[var(--fin-text-2)]">
-                <b className="font-semibold tabular-nums text-[var(--fin-text)]">{r.valor}</b> até {dataBR(r.data)}
-                {r.autor ? `, ${r.autor}` : ''}{r.observacao ? `: ${r.observacao}` : ''}
-              </span>
-              {podeEditar && onApagarRegistro ? (
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => onApagarRegistro(r.id)}
-                  aria-label={`Apagar o registro de ${r.valor} atendimentos em ${dataBR(r.data)}`}
-                >
-                  <Trash2 aria-hidden="true" />
+          {(item.registravel && podeEditar && onRegistrar) || temContas ? (
+            <div className="flex flex-wrap items-center gap-[var(--fin-s-2)]">
+              {item.registravel && podeEditar && onRegistrar ? (
+                <Button variant="outline" size="sm" onClick={onRegistrar} className="h-9 rounded-[10px] px-3 md:h-8">
+                  <Plus aria-hidden="true" /> Registrar atendimentos
                 </Button>
               ) : null}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      <div className="flex flex-wrap items-center justify-between gap-[var(--fin-s-2)]">
-        <p className="fin-t-caption text-[var(--fin-text-3)]">{item.fonte}</p>
-        {item.registravel && podeEditar && onRegistrar ? (
-          <Button variant="outline" size="sm" onClick={onRegistrar} className="h-9 px-3 md:h-8">
-            <Plus aria-hidden="true" /> Registrar atendimentos
-          </Button>
-        ) : null}
-        {temContas ? (
-          <Button
-            variant="outline"
-            size="sm"
-            nativeButton={false}
-            render={<Link href={item.contas!.vencidas.length > 0 ? '/financeiro-ag/pagar?status=VENCIDO' : '/financeiro-ag/pagar'} />}
-            className="h-9 px-3 md:h-8"
-          >
-            Abrir contas a pagar
-          </Button>
-        ) : null}
-      </div>
+              {temContas ? (
+                <Button
+                  variant="outline" size="sm" nativeButton={false} className="h-9 rounded-[10px] px-3 md:h-8"
+                  render={<Link href={item.contas!.vencidas.length > 0 ? '/financeiro-ag/pagar?status=VENCIDO' : '/financeiro-ag/pagar'} />}
+                >
+                  Abrir contas a pagar
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      </BarraDoTom>
     </li>
+  );
+}
+
+/**
+ * O rodapé do gráfico: o mesmo ritmo das metas (a fração de dias úteis), em
+ * três números. No mês aberto: o que o plano pedia até hoje, a diferença e o
+ * que falta por dia útil. No mês fechado: o plano, a diferença e o resultado.
+ */
+function RodapeDoRitmo({ item, cal }: { item: ItemDoPlano; cal: Calendario }) {
+  const planejado = item.planejado ?? 0;
+  const realizado = item.realizado ?? 0;
+  const pedia = cal.aberto ? Math.round(planejado * cal.fracao * 100) / 100 : planejado;
+  const diferenca = Math.round((realizado - pedia) * 100) / 100;
+  const restam = Math.max(0, cal.diasUteis - cal.diasUteisPassados);
+  const falta = Math.max(0, planejado - realizado);
+  const numeros: Array<{ rotulo: string; valor: string; tom?: TomDoPainel }> = [
+    { rotulo: cal.aberto ? 'O plano pedia até hoje' : 'O plano do mês', valor: formatBRL(pedia) },
+    { rotulo: diferenca >= 0 ? 'À frente do ritmo' : 'Atrás do ritmo', valor: formatBRL(Math.abs(diferenca)), tom: diferenca >= 0 ? 'positivo' : 'negativo' },
+    !cal.aberto
+      ? { rotulo: 'Realizado no mês', valor: formatBRL(realizado) }
+      : falta <= 0
+        ? { rotulo: 'Meta do mês', valor: 'Atingida', tom: 'positivo' }
+        : restam > 0
+          ? { rotulo: `Por dia útil, nos ${restam} que restam`, valor: formatBRL(falta / restam) }
+          : { rotulo: 'Falta para a meta', valor: formatBRL(falta) },
+  ];
+  return (
+    <dl className="grid grid-cols-1 gap-[var(--fin-s-2)] rounded-[16px] bg-[var(--fin-surface-sunken)] px-4 py-3 sm:grid-cols-3">
+      {numeros.map(n => (
+        <div key={n.rotulo} className="flex min-w-0 flex-col gap-0.5">
+          <dt className="fin-t-caption truncate text-[var(--fin-text-3)]">{n.rotulo}</dt>
+          <dd
+            className="fin-t-body-strong tabular-nums"
+            style={{ color: n.tom === 'negativo' ? 'var(--fin-negative-text)' : n.tom === 'positivo' ? 'var(--fin-positive)' : 'var(--fin-text)' }}
+          >
+            {n.valor}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
 // ============================================================
 // O painel
 // ============================================================
-
-type LinhaPremissa = IndicadorDoPlano & { id: string };
 
 export function Acompanhamento({
   mes, mesPorExtenso, plano, rel, planoSalvo, salvandoPlano, podeEditar, onEditarPlano, onSalvarPlano,
@@ -255,31 +293,6 @@ export function Acompanhamento({
     [realizado, plano, rel],
   );
 
-  const colunasPremissas = useMemo<FinColuna<LinhaPremissa>[]>(() => {
-    const v = (i: IndicadorDoPlano, x: number | null) => {
-      if (x === null) return '—';
-      if (i.formato === 'percentual') return `${x.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
-      return i.formato === 'dinheiro' ? formatBRL(x) : String(x);
-    };
-    return [
-      {
-        id: 'premissa', cabecalho: 'Premissa', tipo: 'texto', minWidth: 200,
-        render: i => (
-          <span className="flex flex-col">
-            <span className="fin-t-body text-[var(--fin-text)]">{i.titulo}</span>
-            <span className="fin-t-caption text-[var(--fin-text-3)]">{i.nota}</span>
-          </span>
-        ),
-      },
-      { id: 'plano', cabecalho: 'No plano', tipo: 'texto', render: i => <span className="tabular-nums">{v(i, i.planejado)}</span> },
-      { id: 'mes', cabecalho: 'No mês', tipo: 'texto', render: i => <span className="fin-t-body-strong tabular-nums">{v(i, i.realizado)}</span> },
-      {
-        id: 'situacao', cabecalho: 'Situação', tipo: 'status', dominio: 'plano', prioridade: 1,
-        valor: i => (i.realizado === null ? 'sem_dados' : i.desvio ? 'abaixo' : 'em_linha'),
-      },
-    ];
-  }, []);
-
   const abrirRegistro = () => {
     const ultimo = realizado ? ultimoRegistro(realizado.registros, 'atendimentos') : null;
     const hoje = hojeISO();
@@ -320,17 +333,59 @@ export function Acompanhamento({
   const porChave = painel
     ? Object.fromEntries(painel.areas.flatMap(a => a.itens).map(i => [i.chave, i])) as Record<ItemDoPlano['chave'], ItemDoPlano>
     : null;
-  const comissao = porChave?.comissao ?? null;
   const cal = painel?.calendario ?? null;
-  const chipDaResposta = comissao && comissao.situacao !== 'sem_meta' && cal
-    ? {
-        icone: comissao.situacao === 'atrasado' ? TrendingDown : comissao.situacao === 'concluido' ? CircleCheck : TrendingUp,
-        rotulo: comissao.situacao === 'pendente' && cal.aberto
-          ? 'No ritmo do plano'
-          : comissao.situacao === 'atrasado' && cal.aberto ? 'Abaixo do ritmo' : rotuloStatus('plano', comissao.situacao),
-        tom: tomDoChip(comissao.situacao),
-      }
-    : null;
+  const crm = realizado ? metricasDoCrm(realizado) : null;
+  // As mini barras param em hoje no mês aberto: dia que não chegou não é zero.
+  const ateHoje = (serie: number[]) =>
+    serie.slice(0, Math.max(1, cal?.aberto && realizado ? Number(realizado.hoje.slice(8, 10)) : serie.length));
+
+  // ── Os quatro números do topo (o "Volume e resultado" das Análises) ──────
+  const numeros: NumeroDoPainel[] = porChave && realizado && cal ? [
+    {
+      rotulo: 'Receita de comissões', icone: ArrowDownLeft, tom: 'acento',
+      valor: reais(realizado.comissao), valorCompleto: formatBRL(realizado.comissao),
+      sub: porChave.comissao.planejado !== null ? `de ${reais(porChave.comissao.planejado)} planejados` : 'sem meta no plano',
+      selo: seloDoPlano(porChave.comissao),
+      barras: realizado.diario ? { valores: baldes(ateHoje(realizado.diario.comissao)), rotulo: 'Comissão ao longo do mês' } : null,
+      href: '/financeiro-ag/receber',
+    },
+    {
+      rotulo: 'Vendas fechadas', icone: ShoppingBag, tom: 'positivo',
+      valor: String(porChave.vendas.realizado ?? 0),
+      sub: porChave.vendas.planejado !== null ? `de ${porChave.vendas.planejado} planejadas` : 'sem meta no plano',
+      selo: seloDoPlano(porChave.vendas),
+      // As barras contam o mesmo que o número: as ganhas no CRM, ou as vendas do financeiro sem ele.
+      barras: crm
+        ? { valores: baldes(ateHoje(crm.por_dia.ganhas)), rotulo: 'Vendas ganhas no CRM ao longo do mês' }
+        : realizado.diario ? { valores: baldes(ateHoje(realizado.diario.vendas)), rotulo: 'Vendas ao longo do mês' } : null,
+      href: '/vendas',
+    },
+    {
+      rotulo: 'Leads atendidos', icone: Users, tom: 'info',
+      valor: porChave.atendimentos.realizado === null ? '—' : String(porChave.atendimentos.realizado),
+      sub: porChave.atendimentos.realizado === null
+        ? 'sem dados neste mês'
+        : porChave.atendimentos.planejado !== null
+          ? `de ${valor(porChave.atendimentos.planejado, 'contagem')} planejados${crm ? ', no CRM' : ''}`
+          : crm ? 'negociações do mês no CRM' : 'registrados à mão',
+      selo: seloDoPlano(porChave.atendimentos),
+      anel: porChave.atendimentos.progresso !== null ? { pct: porChave.atendimentos.progresso, rotulo: `${Math.round(porChave.atendimentos.progresso)}% dos atendimentos planejados` } : null,
+      aviso: !crm && porChave.atendimentos.realizado === null ? porChave.atendimentos.fonte : undefined,
+    },
+    {
+      rotulo: cal.aberto ? 'Lucro até agora' : 'Lucro do mês', icone: realizado.lucro < 0 ? TrendingDown : Wallet,
+      tom: realizado.lucro < 0 ? 'negativo' : 'acento',
+      valor: reais(realizado.lucro), valorCompleto: formatBRL(realizado.lucro),
+      sub: porChave.lucro.situacao === 'sem_dados'
+        ? 'sem custos do mês lançados: ainda não desconta a estrutura'
+        : porChave.lucro.planejado !== null ? `de ${reais(porChave.lucro.planejado)} desejados${cal.aberto ? ', provisório' : ''}` : 'comissão menos os custos do mês',
+      selo: { tom: tomDaSituacao(porChave.lucro.situacao), texto: rotuloStatus('plano', porChave.lucro.situacao), dica: porChave.lucro.porque },
+      anel: porChave.lucro.progresso !== null && porChave.lucro.progresso > 0 ? { pct: porChave.lucro.progresso, rotulo: `${Math.round(porChave.lucro.progresso)}% do lucro desejado` } : null,
+      href: '/relatorios/lucro-real',
+    },
+  ] : [];
+
+  const ritmo = porChave?.comissao.planejado ? ritmoDoPlano(mes, porChave.comissao.planejado) : [];
 
   return (
     <div className="flex flex-col gap-[var(--fin-s-5)]">
@@ -350,135 +405,116 @@ export function Acompanhamento({
         estado={carregando ? 'carregando' : erro && !realizado ? 'erro' : 'ok'}
         erro={erro && !realizado ? { mensagem: erro, onTentarDeNovo: () => { setCarregando(true); void carregar(); } } : null}
         esqueleto={
-          <div className="flex flex-col gap-[var(--fin-s-5)]">
-            <div className={cn(CARTAO, 'h-[160px] animate-pulse')} />
-            <div className="grid gap-[var(--fin-s-3)] sm:grid-cols-2 xl:grid-cols-4">
-              {[0, 1, 2, 3].map(i => <div key={i} className={cn(CARTAO, 'h-[112px] animate-pulse')} />)}
+          <div className="flex flex-col gap-[var(--fin-s-4)]">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+              {[0, 1, 2, 3].map(i => <div key={i} className={cn(CARTAO_DO_PAINEL, 'h-[168px] animate-pulse')} />)}
             </div>
+            <div className={cn(CARTAO_DO_PAINEL, 'h-[320px] animate-pulse')} />
           </div>
         }
       >
-        {painel && porChave && realizado && cal && comissao ? (
-          <div className="flex flex-col gap-[var(--fin-s-5)]">
-            {/* ── A resposta: a receita do mês contra o plano ──────────── */}
-            <Resposta
-              overline={`RECEITA DE COMISSÕES EM ${mesPorExtenso.toUpperCase()}`}
-              valor={<Money valor={realizado.comissao} size="resposta" align="esquerda" estado="ok" />}
-              frase={`${painel.frase}${comissao.planejado !== null ? ` ${formatBRL(realizado.comissao)} de ${formatBRL(comissao.planejado)} planejados em comissões.` : ''}`}
-              chip={chipDaResposta}
-              marca={comissao.progresso !== null ? (
-                <div className="w-full max-w-[520px]">
-                  <Meter
-                    pct={comissao.progresso}
-                    faixa={faixaDoItem(comissao)}
-                    rotulo={cal.aberto ? `Dia útil ${cal.diasUteisPassados} de ${cal.diasUteis}` : 'Do planejado'}
-                    descricao={comissao.esperadoPct !== null ? 'A marca mostra onde o plano pedia estar hoje.' : 'Do planejado para o mês.'}
-                    marca={comissao.esperadoPct !== null ? { pct: comissao.esperadoPct, rotulo: 'Onde o plano pedia estar hoje' } : null}
-                  />
-                </div>
-              ) : undefined}
-            />
-
-            {/* ── Os indicadores do mês ────────────────────────────────── */}
-            <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard
-                rotulo="Vendas fechadas" icone={ShoppingBag} formato="contagem"
-                valor={porChave.vendas.realizado} estado="ok"
-                contexto={porChave.vendas.planejado !== null
-                  ? `de ${porChave.vendas.planejado} planejadas: ${rotuloStatus('plano', porChave.vendas.situacao).toLowerCase()}`
-                  : 'sem meta de vendas no plano'}
-              />
-              <MetricCard
-                rotulo="Leads atendidos" icone={Users} formato="contagem"
-                valor={porChave.atendimentos.realizado}
-                estado={porChave.atendimentos.realizado === null ? 'indisponivel' : 'ok'}
-                contexto={porChave.atendimentos.realizado === null
-                  ? 'sem registro: o financeiro não recebe os leads do CRM'
-                  : `de ${valor(porChave.atendimentos.planejado, 'contagem')} planejados. ${porChave.atendimentos.fonte}`}
-              />
-              <MetricCard
-                rotulo="Faturamento" icone={ChartColumn}
-                valor={realizado.faturamento} estado="ok"
-                contexto={porChave.faturamento.planejado !== null
-                  ? `de ${formatBRL(porChave.faturamento.planejado)} planejados, volume vendido`
-                  : 'volume vendido, a maior parte é do fornecedor'}
-              />
-              <MetricCard
-                rotulo={cal.aberto ? 'Lucro até agora' : 'Lucro do mês'} icone={realizado.lucro < 0 ? TrendingDown : TrendingUp}
-                valor={realizado.lucro} estado="ok" tone={realizado.lucro < 0 ? 'negativo' : 'neutro'}
-                contexto={porChave.lucro.planejado !== null
-                  ? `de ${formatBRL(porChave.lucro.planejado)} desejados${cal.aberto ? ', provisório' : ''}`
-                  : cal.aberto ? 'provisório até o fim do mês' : 'comissão menos custos do mês'}
-                explicacao={porChave.lucro.porque}
-              />
+        {painel && porChave && realizado && cal ? (
+          <div className="flex flex-col">
+            {/* ── O mês contra o plano ─────────────────────────────────── */}
+            <TituloDeSecao
+              extra={
+                <span className="inline-flex flex-wrap items-center gap-[var(--fin-s-2)]">
+                  {cal.aberto
+                    ? `dia útil ${cal.diasUteisPassados} de ${cal.diasUteis} · ${Math.round(cal.fracao * 100)}% do mês`
+                    : cal.futuro ? 'o mês ainda não começou' : 'mês encerrado'}
+                  {/* De onde vêm leads e vendas: o CRM, ou por que não. */}
+                  {crm
+                    ? <SeloDoTom tom="positivo" title="Leads e vendas fechadas com as contas das Análises do CRM (funis de vendas)">Leads e vendas do CRM</SeloDoTom>
+                    : realizado.crm
+                      ? <SeloDoTom tom="aviso" title={realizado.crm.situacao !== 'ok' ? realizado.crm.detalhe : undefined}>Sem os números do CRM</SeloDoTom>
+                      : null}
+                </span>
+              }
+            >
+              O mês contra o plano
+            </TituloDeSecao>
+            <p className="fin-t-body mt-[var(--fin-s-2)] text-[var(--fin-text-2)]">{painel.frase}</p>
+            <div className="mt-3.5 grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+              {numeros.map(n => <CartaoDeNumero key={n.rotulo} n={n} />)}
             </div>
 
-            {/* ── O que precisa de atenção ─────────────────────────────── */}
-            <section aria-labelledby="t-atencao" className={cn(CARTAO, 'flex flex-col gap-[var(--fin-s-3)] p-[var(--fin-s-5)]')}>
-              <div>
-                <h2 id="t-atencao" className="fin-t-subhead text-[var(--fin-text)]">Precisa da sua atenção</h2>
-                <p className="fin-t-caption text-[var(--fin-text-3)]">
-                  {painel.atencao.length === 0
-                    ? 'Nada fora do plano agora.'
-                    : `${painel.atencao.length} ${painel.atencao.length === 1 ? 'ponto' : 'pontos'}, do mais urgente para o menos.`}
-                </p>
-              </div>
-              {painel.atencao.length === 0 ? (
-                <p className="fin-t-body flex items-center gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] bg-[var(--fin-positive-soft)] px-[var(--fin-s-3)] py-[var(--fin-s-3)] text-[var(--fin-positive)]">
-                  <CircleCheck aria-hidden="true" className="size-4" />
-                  Tudo no ritmo do plano.
-                </p>
-              ) : (
-                <ul className="flex flex-col gap-[var(--fin-s-2)]">
-                  {painel.atencao.map((p, n) => {
-                    const Icone = p.tom === 'negativo' ? TriangleAlert : ICONE[p.chave];
-                    return (
-                      <li key={`${p.chave}-${n}`} className="grid grid-cols-[2rem_minmax(0,1fr)] items-center gap-[var(--fin-s-3)] rounded-[var(--fin-r-md)] border border-[var(--fin-border)] p-[var(--fin-s-3)] sm:grid-cols-[2rem_minmax(0,1fr)_auto]">
-                        <span
-                          aria-hidden="true"
-                          className={cn(
-                            'flex size-8 items-center justify-center rounded-[var(--fin-r-md)]',
-                            p.tom === 'negativo' ? 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)]' : 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)]',
-                          )}
-                        >
-                          <Icone className="size-4" />
-                        </span>
-                        <span className="min-w-0">
-                          <span className="fin-t-body block font-medium text-[var(--fin-text)]">{p.titulo}</span>
-                          <span className="fin-t-caption block tabular-nums text-[var(--fin-text-3)]">{p.detalhe}</span>
-                        </span>
-                        {p.acao?.href ? (
-                          <Button variant="outline" size="sm" nativeButton={false} render={<Link href={p.acao.href} />} className="col-start-2 h-9 justify-self-start px-3 sm:col-start-3 md:h-8">
-                            {p.acao.rotulo}
-                          </Button>
-                        ) : p.acao?.registrar && podeEditar ? (
-                          <Button variant="outline" size="sm" onClick={abrirRegistro} className="col-start-2 h-9 justify-self-start px-3 sm:col-start-3 md:h-8">
-                            {p.acao.rotulo}
-                          </Button>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </section>
+            {/* ── O ritmo e o que precisa de atenção ───────────────────── */}
+            <div className="mt-3.5 grid grid-cols-1 gap-3.5 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
+              <section aria-labelledby="pl-ritmo" className={cn(CARTAO_DO_PAINEL, 'flex min-w-0 flex-col gap-[var(--fin-s-4)] p-[22px]')}>
+                <CabecaDoBloco id="pl-ritmo" tom="acento" icone={ChartLine} titulo="O ritmo do mês" sub="Comissão acumulada contra o que o plano pedia até cada dia">
+                  <div className="flex flex-wrap items-center gap-[var(--fin-s-2)]">
+                    <SeloDoTom tom="acento">Realizado {formatBRL(realizado.comissao)}</SeloDoTom>
+                    {ritmo.length ? <SeloDoTom tom="neutro">Plano {formatBRL(ritmo[ritmo.length - 1])}</SeloDoTom> : null}
+                  </div>
+                </CabecaDoBloco>
+                {realizado.diario ? (
+                  <RitmoDoMes
+                    mes={mes}
+                    comissaoPorDia={realizado.diario.comissao}
+                    ritmo={ritmo}
+                    diaDeHoje={cal.futuro ? 0 : cal.aberto ? Number(realizado.hoje.slice(8, 10)) : realizado.diario.comissao.length}
+                  />
+                ) : null}
+                {porChave.comissao.planejado !== null && !cal.futuro ? <RodapeDoRitmo item={porChave.comissao} cal={cal} /> : null}
+              </section>
+
+              <section aria-labelledby="pl-atencao" className={cn(CARTAO_DO_PAINEL, 'flex min-w-0 flex-col gap-[var(--fin-s-4)] p-[22px]')}>
+                <CabecaDoBloco
+                  id="pl-atencao"
+                  tom={painel.atencao.some(p => p.tom === 'negativo') ? 'negativo' : painel.atencao.length ? 'aviso' : 'positivo'}
+                  icone={painel.atencao.length ? TriangleAlert : CircleCheck}
+                  titulo="Precisa da sua atenção"
+                  sub={painel.atencao.length === 0 ? 'Nada fora do plano agora' : `${painel.atencao.length} ${painel.atencao.length === 1 ? 'ponto' : 'pontos'}, do mais urgente para o menos`}
+                />
+                {painel.atencao.length === 0 ? (
+                  <p className="fin-t-body flex items-center gap-[var(--fin-s-2)] rounded-[12px] bg-[var(--fin-positive-soft)] px-[var(--fin-s-3)] py-[var(--fin-s-3)] text-[var(--fin-positive)]">
+                    <CircleCheck aria-hidden="true" className="size-4" /> Tudo no ritmo do plano.
+                  </p>
+                ) : (
+                  <ul className="flex flex-col gap-[18px]">
+                    {painel.atencao.map((p, n) => {
+                      const Icone = ICONE_DO_PONTO[p.chave];
+                      const tom: TomDoPainel = p.tom === 'negativo' ? 'negativo' : 'aviso';
+                      return (
+                        <li key={`${p.chave}-${n}`} className="flex flex-col gap-1.5">
+                          <span className="flex items-center gap-2.5">
+                            <Icone aria-hidden="true" className={cn('size-4 shrink-0', tom === 'negativo' ? 'text-[var(--fin-negative-text)]' : 'text-[var(--fin-warning-text)]')} />
+                            <span className="fin-t-body-strong min-w-0 flex-1 text-[var(--fin-text)]">{p.titulo}</span>
+                            {p.acao?.href ? (
+                              <Link href={p.acao.href} className="fin-t-caption inline-flex shrink-0 items-center gap-1 font-medium text-[var(--fin-accent)] hover:underline">
+                                {p.acao.rotulo} <ArrowRight aria-hidden="true" className="size-3.5" />
+                              </Link>
+                            ) : p.acao?.registrar && podeEditar ? (
+                              <button type="button" onClick={abrirRegistro} className="fin-t-caption inline-flex shrink-0 items-center gap-1 font-medium text-[var(--fin-accent)] hover:underline">
+                                {p.acao.rotulo} <ArrowRight aria-hidden="true" className="size-3.5" />
+                              </button>
+                            ) : null}
+                          </span>
+                          <span className="fin-t-caption pl-[26px] tabular-nums text-[var(--fin-text-3)]">{p.detalhe}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
+            </div>
 
             {/* ── Por área ─────────────────────────────────────────────── */}
-            <div className="grid grid-cols-1 items-start gap-[var(--fin-s-5)] xl:grid-cols-2">
+            <div className="mt-[34px]">
+              <TituloDeSecao extra="planejado, realizado, o que falta e a marca de onde o plano pedia estar hoje">Por área</TituloDeSecao>
+            </div>
+            <div className="mt-3.5 grid grid-cols-1 gap-3.5 xl:grid-cols-2">
               {painel.areas.map(area => (
-                <section key={area.id} aria-labelledby={`t-area-${area.id}`} className={cn(CARTAO, 'overflow-hidden')}>
-                  <div className="border-b border-[var(--fin-border)] px-[var(--fin-s-5)] pb-[var(--fin-s-3)] pt-[var(--fin-s-4)]">
-                    <h2 id={`t-area-${area.id}`} className="fin-t-subhead text-[var(--fin-text)]">{area.titulo}</h2>
-                    <p className="fin-t-caption text-[var(--fin-text-3)]">{SOBRE_A_AREA[area.id]}</p>
-                  </div>
-                  <ul className="divide-y divide-[var(--fin-border)]">
+                <section key={area.id} aria-labelledby={`pl-area-${area.id}`} className={cn(CARTAO_DO_PAINEL, 'flex min-w-0 flex-col gap-[var(--fin-s-5)] p-[22px]')}>
+                  <CabecaDoBloco id={`pl-area-${area.id}`} tom={TOM_DA_AREA[area.id]} icone={ICONE_DA_AREA[area.id]} titulo={area.titulo} sub={SOBRE_A_AREA[area.id]} />
+                  <ul className="flex flex-col gap-[22px]">
                     {area.itens.map(item => (
                       <LinhaDoItem
                         key={item.chave}
                         item={item}
                         podeEditar={podeEditar}
                         onRegistrar={item.registravel ? abrirRegistro : undefined}
-                        registros={item.chave === 'atendimentos' ? realizado.registros.filter(r => r.chave === 'atendimentos') : undefined}
+                        registros={item.chave === 'atendimentos' && !crm ? realizado.registros.filter(r => r.chave === 'atendimentos') : undefined}
                         onApagarRegistro={item.chave === 'atendimentos' ? (id => void apagar(id)) : undefined}
                       />
                     ))}
@@ -488,22 +524,34 @@ export function Acompanhamento({
             </div>
 
             {/* ── As premissas contra o mês ────────────────────────────── */}
-            <section aria-labelledby="t-premissas" className="flex flex-col gap-[var(--fin-s-3)]">
-              <div>
-                <h2 id="t-premissas" className="fin-t-subhead text-[var(--fin-text)]">As premissas do plano no mês</h2>
-                <p className="fin-t-caption text-[var(--fin-text-3)]">As metas partem destes números: se eles mudam, o plano muda junto.</p>
-              </div>
-              <FinTable<LinhaPremissa>
-                linhas={painel.indicadores.map(i => ({ ...i, id: i.titulo }))}
-                colunas={colunasPremissas}
-                chave={i => i.id}
-                densidade="compacta"
-                estado="ok"
-                vazio={{ motivo: 'sem-dado', titulo: 'Sem premissas', oQueE: 'Aqui aparecem as premissas do plano contra o que aconteceu no mês.' }}
-              />
-            </section>
+            <div className="mt-[34px]">
+              <TituloDeSecao extra="as metas partem destes números">As premissas do plano no mês</TituloDeSecao>
+            </div>
+            <ul className="mt-3.5 grid grid-cols-1 gap-3 md:grid-cols-2">
+              {painel.indicadores.map((i: IndicadorDoPlano) => {
+                const v = (x: number | null) => {
+                  if (x === null) return '—';
+                  if (i.formato === 'percentual') return `${x.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+                  return i.formato === 'dinheiro' ? formatBRL(x) : String(x);
+                };
+                const s = i.realizado === null ? 'sem_dados' : i.desvio ? 'abaixo' : 'em_linha';
+                return (
+                  <li key={i.titulo} className={cn(CARTAO_DO_PAINEL, 'flex items-center gap-3.5 px-5 py-[18px]')}>
+                    <span className="min-w-0 flex-1">
+                      <span className="fin-t-body-strong block text-[var(--fin-text)]">{i.titulo}</span>
+                      <span className="fin-t-caption mt-[3px] block text-[var(--fin-text-3)]">{i.nota}</span>
+                    </span>
+                    <span className="flex flex-col items-end gap-1">
+                      <span className="fin-t-body-strong tabular-nums text-[var(--fin-text)]">{v(i.realizado)}</span>
+                      <span className="fin-t-caption tabular-nums text-[var(--fin-text-3)]">plano {v(i.planejado)}</span>
+                    </span>
+                    <SeloDoTom tom={tomDaSituacao(s)}>{rotuloStatus('plano', s)}</SeloDoTom>
+                  </li>
+                );
+              })}
+            </ul>
 
-            <p className="fin-t-caption text-[var(--fin-text-3)]">
+            <p className="fin-t-caption mt-[var(--fin-s-5)] text-[var(--fin-text-3)]">
               O realizado conta desde o dia 1 de {mesPorExtenso}, com a mesma régua do relatório Lucro real, mesmo que o plano tenha sido feito depois. Editar o plano refaz as metas e não apaga nenhum registro.
             </p>
           </div>

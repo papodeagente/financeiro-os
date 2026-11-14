@@ -4,6 +4,8 @@ import { generateId } from '@/lib/utils';
 import { getTenantId } from '@/lib/tenant';
 import {
   recalcularVagasPeriodo,
+  parcelasValidas,
+  MAX_PARCELAS,
   calcReservaFinanceiro,
   registrarEvento,
   type ReservaData,
@@ -117,13 +119,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ gru
   const { rows: cli } = await pool.query(`SELECT id FROM clientes WHERE id = $1 AND tenant_id = $2`, [clienteId, tenantId]);
   if (cli.length === 0) return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 400 });
 
-  // Verifica período + vagas disponíveis
-  const { rows: pRows } = await pool.query(
-    `SELECT id, data FROM grupo_periodos_vagas WHERE id = $1 AND grupo_id = $2 AND tenant_id = $3`,
-    [periodoId, grupo_id, tenantId],
-  );
-  if (pRows.length === 0) return NextResponse.json({ error: 'Período não encontrado' }, { status: 400 });
-  const periodoData = pRows[0].data as PeriodoVagasData;
+  const parcelas = parcelasValidas(body.parcelas);
+  if (parcelas === null) {
+    return NextResponse.json({ error: `Parcelas: de 1 a ${MAX_PARCELAS}.` }, { status: 400 });
+  }
 
   // Consulta config pra saber se lista de espera é permitida
   const { rows: gRows } = await pool.query(
@@ -133,39 +132,72 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ gru
   const config = (gRows[0]?.data as GestaoGrupoData | undefined)?.config_vagas;
   const permiteListaEspera = !!config?.permitir_lista_espera;
 
-  let statusFinal: ReservaStatus;
-  if ((body.status as string) === 'lista_espera') {
-    if (!permiteListaEspera) return NextResponse.json({ error: 'Lista de espera não está habilitada para este grupo' }, { status: 400 });
-    statusFinal = 'lista_espera';
-  } else if (periodoData.vagas_disponiveis <= 0) {
-    if (permiteListaEspera) {
-      statusFinal = 'lista_espera'; // sem vaga + lista habilitada → vai pra lista
-    } else {
-      return NextResponse.json({ error: 'Não há vagas disponíveis neste período' }, { status: 400 });
-    }
-  } else {
-    statusFinal = (body.status as ReservaStatus) || 'reservado';
-  }
-
+  // A última vaga é decidida DENTRO de uma transação, com o período travado
+  // e as vagas contadas na hora (auditoria 04/11/2026, FIN2-14). Antes, duas
+  // reservas simultâneas liam "1 vaga" no cadastro do período e as duas
+  // entravam.
   const reservaId = generateId();
   const data: ReservaData = {
     nome_passageiro: String(body.nome_passageiro || ''),
     tipo_acomodacao: String(body.tipo_acomodacao || 'DBL').toUpperCase(),
     valor_cobrado: Number(body.valor_cobrado) || 0,
-    parcelas: Math.max(1, Math.floor(Number(body.parcelas) || 1)),
+    parcelas,
     observacoes: String(body.observacoes || ''),
     documentos_ok: !!body.documentos_ok,
     passaporte_vencimento: String(body.passaporte_vencimento || ''),
     venda_id: null,
   };
+  let statusFinal: ReservaStatus;
+  let periodoAtualizado: Awaited<ReturnType<typeof recalcularVagasPeriodo>>;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: pRows } = await client.query(
+      `SELECT id, data FROM grupo_periodos_vagas WHERE id = $1 AND grupo_id = $2 AND tenant_id = $3 FOR UPDATE`,
+      [periodoId, grupo_id, tenantId],
+    );
+    if (pRows.length === 0) {
+      await client.query('ROLLBACK');
+      return NextResponse.json({ error: 'Período não encontrado' }, { status: 400 });
+    }
+    const periodoData = pRows[0].data as PeriodoVagasData;
+    const { rows: ocupadas } = await client.query(
+      `SELECT COUNT(*)::int AS n FROM grupo_reservas
+        WHERE periodo_id = $1 AND tenant_id = $2 AND status IN ('reservado', 'lista_espera', 'confirmado')`,
+      [periodoId, tenantId],
+    );
+    const vagasLivres = Math.max(Number(periodoData.vagas_total || 0) - Number(ocupadas[0]?.n ?? 0), 0);
 
-  await pool.query(
-    `INSERT INTO grupo_reservas (id, grupo_id, periodo_id, cliente_id, status, data, tenant_id, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
-    [reservaId, grupo_id, periodoId, clienteId, statusFinal, JSON.stringify(data), tenantId],
-  );
+    if ((body.status as string) === 'lista_espera') {
+      if (!permiteListaEspera) {
+        await client.query('ROLLBACK');
+        return NextResponse.json({ error: 'Lista de espera não está habilitada para este grupo' }, { status: 400 });
+      }
+      statusFinal = 'lista_espera';
+    } else if (vagasLivres <= 0) {
+      if (permiteListaEspera) {
+        statusFinal = 'lista_espera'; // sem vaga + lista habilitada → vai pra lista
+      } else {
+        await client.query('ROLLBACK');
+        return NextResponse.json({ error: 'Não há vagas disponíveis neste período' }, { status: 409 });
+      }
+    } else {
+      statusFinal = (body.status as ReservaStatus) || 'reservado';
+    }
 
-  const periodoAtualizado = await recalcularVagasPeriodo(pool, periodoId, tenantId);
+    await client.query(
+      `INSERT INTO grupo_reservas (id, grupo_id, periodo_id, cliente_id, status, data, tenant_id, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
+      [reservaId, grupo_id, periodoId, clienteId, statusFinal, JSON.stringify(data), tenantId],
+    );
+    periodoAtualizado = await recalcularVagasPeriodo(client as unknown as Parameters<typeof recalcularVagasPeriodo>[0], periodoId, tenantId);
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
 
   await registrarEvento(pool, {
     grupo_id, tenant_id: tenantId, tipo: 'reserva_criada',

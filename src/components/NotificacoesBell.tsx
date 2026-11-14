@@ -28,13 +28,20 @@ import {
   ThumbsUp,
   UserPlus,
   UserX,
+  ClipboardCheck,
+  Stamp,
+  CalendarClock,
+  AlarmClock, Landmark, ReceiptText, FileExclamationPoint,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useModulos } from '@/components/useModulos';
 import {
   PREFERENCIAS_NOTIFICACOES_PADRAO,
   TIPOS_NOTIFICACAO,
+  tiposDaVersao,
   type PreferenciasNotificacoes,
 } from '@/lib/notificacoes-config';
+import { avisoLiberado } from '@/lib/modulos';
 
 interface Notificacao {
   id: string;
@@ -96,6 +103,13 @@ const ICON_FOR_TIPO: Record<string, typeof Bell> = {
   PROPOSTA_LEAD: UserPlus,
   VENDA_VENDEDOR_NAO_CADASTRADO: UserX,
   VENDA_CANCELADA_CRM: AlertCircle,
+  APROVACAO_PEDIDA: Stamp,
+  APROVACAO_DECIDIDA: ClipboardCheck,
+  CONTAS_A_PAGAR_VENCENDO: CalendarClock,
+  CONTAS_A_RECEBER_ATRASADAS: AlarmClock,
+  EXTRATO_AUTOMATICO: Landmark,
+  COBRANCA_PENDENCIA: ReceiptText,
+  NOTA_RECUSADA: FileExclamationPoint,
 };
 
 const COLOR_FOR_TIPO: Record<string, string> = {
@@ -105,6 +119,13 @@ const COLOR_FOR_TIPO: Record<string, string> = {
   PROPOSTA_LEAD: 'text-[var(--fin-warning-text)] bg-[var(--fin-warning-soft)]',
   VENDA_VENDEDOR_NAO_CADASTRADO: 'text-[var(--fin-negative-text)] bg-[var(--fin-negative-soft)]',
   VENDA_CANCELADA_CRM: 'text-[var(--fin-warning-text)] bg-[var(--fin-warning-soft)]',
+  APROVACAO_PEDIDA: 'text-[var(--fin-accent)] bg-[var(--fin-accent-soft)]',
+  APROVACAO_DECIDIDA: 'text-[var(--fin-positive)] bg-[var(--fin-positive-soft)]',
+  CONTAS_A_PAGAR_VENCENDO: 'text-[var(--fin-warning-text)] bg-[var(--fin-warning-soft)]',
+  CONTAS_A_RECEBER_ATRASADAS: 'text-[var(--fin-negative-text)] bg-[var(--fin-negative-soft)]',
+  EXTRATO_AUTOMATICO: 'text-[var(--fin-warning-text)] bg-[var(--fin-warning-soft)]',
+  COBRANCA_PENDENCIA: 'text-[var(--fin-warning-text)] bg-[var(--fin-warning-soft)]',
+  NOTA_RECUSADA: 'text-[var(--fin-negative-text)] bg-[var(--fin-negative-soft)]',
 };
 
 function createDefaultPreferences(): PreferenciasNotificacoes {
@@ -384,9 +405,16 @@ export function NotificacoesBell() {
   itemsRef.current = items;
   loadedPageRef.current = loadedPage;
 
+  // Versão simples: as preferências mostram só os tipos de sempre (notificacoes-config.ts).
+  // Na completa, o tipo de um módulo só aparece com ele ligado (modulos.ts, MODULO_DO_AVISO).
+  const { telasCompletas, ligados } = useModulos();
+  const tiposDaConta = useMemo(
+    () => tiposDaVersao(telasCompletas).filter(tipo => avisoLiberado({ ligados }, tipo)),
+    [telasCompletas, ligados],
+  );
   const availableTypes = useMemo(
-    () => Array.from(new Set([...CONFIGURED_TYPES, ...items.map(item => item.tipo)])),
-    [items],
+    () => Array.from(new Set([...tiposDaConta, ...items.map(item => item.tipo)])),
+    [items, tiposDaConta],
   );
   const preferencesDirty = useMemo(
     () => preferenceSignature(preferenceDraft) !== preferenceSignature(preferences),
@@ -1306,7 +1334,7 @@ export function NotificacoesBell() {
                 <legend className="text-xs font-semibold text-[var(--t-text)]">Tipos de notificação</legend>
                 <p className="mt-0.5 text-[11px] text-[var(--t-text-muted)]">Escolha quais eventos devem aparecer para você.</p>
                 <div className="mt-3 space-y-1">
-                  {CONFIGURED_TYPES.map(tipo => {
+                  {tiposDaConta.map(tipo => {
                     const Icon = ICON_FOR_TIPO[tipo] ?? Bell;
                     const enabled = preferenceDraft.tipos[tipo] !== false;
                     return (

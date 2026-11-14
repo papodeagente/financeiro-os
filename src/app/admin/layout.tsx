@@ -3,18 +3,22 @@
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, Building2, LogOut, Shield, Sparkles, Image as ImageIcon, Link as LinkIcon, MessageSquare, Users, UserCog } from 'lucide-react'
+import { LayoutDashboard, Building2, LogOut, Shield, Sparkles, Image as ImageIcon, Link as LinkIcon, MessageSquare, KeyRound, Users, UserCog, Blocks, HeartPulse, FlaskConical } from 'lucide-react'
 import { TELAS_DO_CS, rotuloDoPapel, type PapelDaPlataforma } from '@/lib/plataforma'
 import { PapelDaPlataformaContext } from '@/components/admin/PapelDaPlataforma'
 
 const todosOsItens = [
   { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/tenants', label: 'Agencias', icon: Building2 },
+  { href: '/admin/modulos', label: 'Módulos', icon: Blocks },
   { href: '/admin/planos', label: 'Planos', icon: Sparkles },
   { href: '/admin/convites', label: 'Convites', icon: LinkIcon },
   { href: '/admin/marketing', label: 'Marketing', icon: ImageIcon },
   { href: '/admin/support', label: 'Suporte', icon: MessageSquare },
+  { href: '/admin/cofre', label: 'Cofre', icon: KeyRound },
   { href: '/admin/equipe', label: 'Equipe', icon: Users },
+  { href: '/admin/saude-da-volta', label: 'Saúde da volta', icon: HeartPulse },
+  { href: '/admin/demo', label: 'Demonstração', icon: FlaskConical },
   { href: '/admin/minha-conta', label: 'Minha conta', icon: UserCog },
 ]
 

@@ -1,9 +1,22 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
+import { seedAutorizado } from '@/lib/seed-token';
+import { permissoesParaPerfil } from '@/lib/permissoes';
 
-export async function POST() {
+// Cria o primeiro administrador numa instalação vazia. Exige o token de
+// instalação (ver src/lib/seed-token.ts) e a senha escolhida por quem roda,
+// no corpo. A senha nunca volta na resposta.
+export async function POST(req: Request) {
   try {
+    if (!seedAutorizado(req)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    let senhaEscolhida = '';
+    try {
+      senhaEscolhida = String((await req.json())?.senha ?? '');
+    } catch { /* corpo ausente */ }
+    if (senhaEscolhida.length < 12) {
+      return NextResponse.json({ error: 'Envie { senha } com 12 caracteres ou mais.' }, { status: 400 });
+    }
     await initDB();
     if (!pool) {
       return NextResponse.json({ error: 'Banco indisponivel' }, { status: 503 });
@@ -42,14 +55,8 @@ export async function POST() {
       );
     }
 
-    // Generate a random password for security
-    const randomPwd = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-      .map(b => b.toString(36).padStart(2, '0'))
-      .join('')
-      .slice(0, 16);
-
     const adminEmail = process.env.ADMIN_EMAIL || 'admin@entur.com.br';
-    const senhaHash = await hashPassword(randomPwd);
+    const senhaHash = await hashPassword(senhaEscolhida);
     const id = Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
     const admin = {
       id,
@@ -57,15 +64,8 @@ export async function POST() {
       email: adminEmail,
       senha_hash: senhaHash,
       perfil: 'ADMIN',
-      permissoes: {
-        ver_vendas_todos: true,
-        ver_financeiro: true,
-        editar_financeiro: true,
-        ver_comissoes: true,
-        acessar_relatorios: true,
-        gerenciar_usuarios: true,
-        ver_extrato_contas: [],
-      },
+      permissoes: permissoesParaPerfil('ADMIN'),
+      token_version: 1,
       ativo: true,
     };
 
@@ -79,9 +79,7 @@ export async function POST() {
       ok: true,
       message: 'Admin criado com sucesso',
       email: admin.email,
-      senha: randomPwd,
       tenantId,
-      aviso: 'ANOTE ESTA SENHA! Ela nao sera exibida novamente. Troque apos o primeiro login.',
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Erro desconhecido';
