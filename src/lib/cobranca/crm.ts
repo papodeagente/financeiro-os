@@ -10,6 +10,7 @@ import type { ExecutorSQL } from '../caixa-atomico';
 // webhook (e os testes de lógica pura) não arrasta o módulo inteiro do CRM.
 import { deCentavos } from '../money';
 import { urlDoPortalParaCrm } from './portal';
+import { ehAgenciaDemo } from '../demo/saidas';
 import type { CanalCobranca } from './config';
 
 export type EventoCobrancaCRM = 'COBRANCA_EMITIDA' | 'COBRANCA_LEMBRETE' | 'COBRANCA_PAGA' | 'COBRANCA_ENVIAR';
@@ -170,6 +171,8 @@ export async function avisarCrm(
 /** A agência tem o CRM ligado? (Sem ele, "enviar por e-mail/WhatsApp" não tem por onde sair.) */
 export async function crmLigado(exec: ExecutorSQL, tenantId: string): Promise<boolean> {
   try {
+    // Agência de demonstração: nada sai (demo/saidas.ts).
+    if (await ehAgenciaDemo(exec, tenantId)) return false;
     const { rows: t } = await exec.query(`SELECT to_regclass('public.crm_config') IS NOT NULL AS ok`);
     if (!t[0]?.ok) return false;
     const { rows } = await exec.query(

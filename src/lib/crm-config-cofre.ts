@@ -13,6 +13,7 @@
  * Sem a chave mestra no ambiente, grava como antes (texto), com aviso.
  */
 import { cifrar, cofreDisponivel, decifrar } from './cofre';
+import { ehAgenciaDemo } from './demo/saidas';
 
 const SEGREDOS = ['api_key_entur', 'api_key_crm'] as const;
 const SUFIXO = '_cofre';
@@ -68,6 +69,9 @@ export function selarCrmConfig(aberta: Dados, anterior?: Dados | null): Dados {
 
 /** Lê a config do tenant, já aberta, e regrava cifrado o registro antigo em texto. */
 export async function lerCrmConfig(db: Consulta, tenantId: string): Promise<Dados | null> {
+  // Agência de demonstração (14/11/2026): nunca tem CRM. Todo envio ao CRM
+  // (e-mail, WhatsApp, avisos) lê a config por aqui e não acha nada.
+  if (await ehAgenciaDemo(db, tenantId)) return null;
   const { rows } = await db.query(
     "SELECT data FROM crm_config WHERE id = 'singleton' AND tenant_id = $1",
     [tenantId],
