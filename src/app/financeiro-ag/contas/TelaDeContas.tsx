@@ -318,16 +318,22 @@ export function TelaDeContas() {
     const base = criarColunas({ onMenu: (linha, posicao) => setMenu({ linha, posicao }), campos });
     if (!multi) return base;
     const empresa: FinColuna<LinhaDeConta> = {
-      id: 'empresa', cabecalho: 'Empresa', tipo: 'texto', minWidth: 120,
+      id: 'empresa', cabecalho: 'Empresa', tipo: 'texto', minWidth: 96,
       render: l => {
         const nome = nomeDaEmpresa(empresas, l.empresa_id);
-        return <span title={nome} className="block max-w-[120px] truncate text-[var(--fin-text-2)]">{nome}</span>;
+        return <span title={nome} className="block max-w-[96px] truncate text-[var(--fin-text-2)]">{nome}</span>;
       },
     };
     const i = base.findIndex(c => c.id === 'pessoa');
     return [...base.slice(0, i), empresa, ...base.slice(i)];
   }, [multi, empresas, campos]);
-  const colunasVisiveisDaTabela = React.useMemo(() => (multi ? [...colunas, 'empresa'] : colunas), [multi, colunas]);
+  // Com a coluna Empresa, a lista padrão deixa a Cobrança para o "Colunas"
+  // (assim Valor e ações cabem em 1440). Quem escolheu as colunas fica com a escolha.
+  const colunasVisiveisDaTabela = React.useMemo(() => {
+    if (!multi) return colunas;
+    const padrao = colunas.length === COLUNAS_PADRAO.length && COLUNAS_PADRAO.every(c => colunas.includes(c));
+    return [...(padrao ? colunas.filter(c => c !== 'cobranca') : colunas), 'empresa'];
+  }, [multi, colunas]);
   const verExcluidas = f.situacao === 'excluido';
   const contasEscolhiveis = contasParaEscolher(contasBancarias, f.conta);
   const contasParaLiquidar = contasParaEscolher(contasBancarias);
