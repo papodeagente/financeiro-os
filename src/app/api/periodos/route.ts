@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao, recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaAcao, recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { fecharPeriodo, listarPeriodos } from '@/lib/periodo-fechado';
 
@@ -12,6 +12,8 @@ import { fecharPeriodo, listarPeriodos } from '@/lib/periodo-fechado';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();
@@ -21,6 +23,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   const corpo = (await req.json().catch(() => ({}))) as { conta_bancaria_id?: string; ate?: string };
   // Direito "Fechar caixa" (perfis de acesso) e, com conta escolhida, a conta liberada.
   const recusa = (await recusaFinanceira('escrever'))

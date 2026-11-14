@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao } from '@/lib/guarda-rota';
+import { recusaAcao, recusaModulo } from '@/lib/guarda-rota';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { gravarEmissao, hojeEmBrasilia, previaDaEmissao, type PedidoDeEmissao } from '@/lib/cobranca/servidor';
 import { chaveDe, cobrancaParaTela, lerCorpo, previaParaTela, quemEsta, respostaDeErroDaCobranca } from '@/lib/cobranca/rota';
@@ -13,6 +13,8 @@ import { chaveDe, cobrancaParaTela, lerCorpo, previaParaTela, quemEsta, resposta
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('cobranca');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('gerar_boletos');
   if (recusa) return recusa;
   const corpo = await lerCorpo<{ modo?: string; conta_id?: string; provedor?: PedidoDeEmissao['provedor']; descricao?: string; assinatura?: string }>(req);

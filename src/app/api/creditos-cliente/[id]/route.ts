@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao } from '@/lib/guarda-rota';
+import { recusaAcao, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao } from '@/lib/caixa-atomico';
 import { ajustarCredito } from '@/lib/credito-cliente-servidor';
 import { centavosDe, lerJson, respostaDeErroDaParteD } from '@/lib/parte-d-rota';
@@ -11,6 +11,8 @@ import { centavosDe, lerJson, respostaDeErroDaParteD } from '@/lib/parte-d-rota'
 export const dynamic = 'force-dynamic';
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('usar_credito_cliente');
   if (recusa) return recusa;
   await initDB();

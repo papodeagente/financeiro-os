@@ -2,12 +2,15 @@ import { NextResponse } from 'next/server';
 import { contextoDaComissao, quemFechaDo, respostaDeErroDaComissao } from '@/lib/comissao-rota';
 import { fecharComissoes } from '@/lib/comissao-funcoes-servidor';
 import { emTransacao } from '@/lib/caixa-atomico';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 // Fechar comissões até a data: { ate, participantes, assinatura? }. Uma pessoa com erro não trava as outras;
 // a de uma função que outra pessoa fecha volta em "recusados".
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('comissoes');
+  if (semModulo) return semModulo;
   const ctx = await contextoDaComissao(['fechar_comissoes', 'ver_comissoes_todos']);
   if (ctx instanceof NextResponse) return ctx;
   const corpo = (await req.json().catch(() => null)) as { ate?: string; participantes?: unknown; assinatura?: string } | null;

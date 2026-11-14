@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
-import { recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { contexto } from '@/lib/fornecedor-rota';
 
 // Fornecedores para escolher nas telas do lado do fornecedor (nunca digitar código).
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();

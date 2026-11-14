@@ -23,6 +23,8 @@ import { tarefaLiquidarAutomaticamente } from '../venda-liquidar-auto';
 import { TIPO_TAREFA_MIGRACAO, processarTarefaMigracao } from '../migracao/servidor';
 import { tarefaComissaoPagaAoCrm } from '../comissao-do-crm-servidor';
 import { janelaDeMinutos, janelaDiaria, rodarAgendador, type DefinicaoTarefa, type ResumoAgendador } from './nucleo';
+import { MODULO_DA_TAREFA } from '../modulos';
+import { agenciasComModulo } from '../modulos-servidor';
 
 // A aplicação da mudança de sistema roda em blocos pela fila.
 registrarProcessador(TIPO_TAREFA_MIGRACAO, processarTarefaMigracao);
@@ -66,12 +68,22 @@ export const tarefaRazaoConferencia: DefinicaoTarefa = {
 export const tarefaFila: DefinicaoTarefa = {
   nome: 'fila',
   janela: janelaDeMinutos(1),
-  executar: async ({ exec, restanteMs }) => processarFila(exec, { orcamentoMs: Math.min(30_000, restanteMs()) }),
+  // Cada tipo de tarefa de módulo só anda nas agências com o módulo (modulos.ts, MODULO_DO_TIPO_NA_FILA).
+  executar: async ({ exec, restanteMs }) => processarFila(exec, { orcamentoMs: Math.min(30_000, restanteMs()), agenciasComModulo }),
 };
 
-export const TAREFAS: DefinicaoTarefa[] = [tarefaRazaoAbertura, tarefaRazaoConferencia, tarefaRecorrenciaGerar, tarefaAvisosVencimento, tarefaReguaCobranca, tarefaCotacoes, tarefaFaturasFornecedor, tarefaNotasPorGatilho, tarefaComissoesDoDia, tarefaCreditosEReembolsos, tarefaMontarFaturas, tarefaExtratoAutomatico, tarefaAcompanharNotas, tarefaRelatoriosAgendados, tarefaLiquidarAutomaticamente, tarefaFila];
-// Avisos de comissão do CRM paga (comissao-do-crm-servidor.ts), só nas contas do ecossistema.
-TAREFAS.push(tarefaComissaoPagaAoCrm);
+/**
+ * Cada tarefa com o módulo dela (modulos.ts, MODULO_DA_TAREFA): razão e fila
+ * são do motor e atendem todas as agências; o resto só as agências com o
+ * módulo. scripts/test-sql-agendador-modulos.mjs confere que nenhuma ficou
+ * sem declarar.
+ */
+const comModulo = (t: DefinicaoTarefa): DefinicaoTarefa => ({ ...t, modulo: MODULO_DA_TAREFA[t.nome] });
+
+export const TAREFAS: DefinicaoTarefa[] = [tarefaRazaoAbertura, tarefaRazaoConferencia, tarefaRecorrenciaGerar, tarefaAvisosVencimento, tarefaReguaCobranca, tarefaCotacoes, tarefaFaturasFornecedor, tarefaNotasPorGatilho, tarefaComissoesDoDia, tarefaCreditosEReembolsos, tarefaMontarFaturas, tarefaExtratoAutomatico, tarefaAcompanharNotas, tarefaRelatoriosAgendados, tarefaLiquidarAutomaticamente, tarefaFila,
+  // Avisos de comissão do CRM paga (comissao-do-crm-servidor.ts), só nas contas do ecossistema.
+  tarefaComissaoPagaAoCrm,
+].map(comModulo);
 
 /** Roda o agendador contra o banco de verdade. */
 export async function executarAgendadorAgora(): Promise<ResumoAgendador> {
@@ -85,5 +97,6 @@ export async function executarAgendadorAgora(): Promise<ResumoAgendador> {
       return { exec: client as unknown as ExecutorSQL, liberar: () => client.release() };
     },
     emTransacao,
+    agenciasComModulo,
   });
 }

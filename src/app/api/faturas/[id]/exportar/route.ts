@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao } from '@/lib/guarda-rota';
+import { recusaAcao, recusaModulo } from '@/lib/guarda-rota';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { detalheDaFatura } from '@/lib/fatura-servidor';
 import { csvDe, linhasDaExportacao } from '@/lib/fatura-documento';
@@ -13,6 +13,8 @@ import { respostaDeErroDaFatura } from '@/lib/fatura-rota';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('exportar');
   if (recusa) return recusa;
   await initDB();

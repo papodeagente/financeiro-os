@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao, recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaAcao, recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { ErroBaixa } from '@/lib/baixas-servidor';
 import { RecusaDaBaixa, type SessaoDaBaixa } from '@/lib/baixas-porteiro';
@@ -32,6 +32,8 @@ function erro(e: unknown, contexto: string) {
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('cobranca');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();
@@ -45,6 +47,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('cobranca');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('gerar_boletos');
   if (recusa) return recusa;
   await initDB();

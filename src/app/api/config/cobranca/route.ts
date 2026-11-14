@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAdmin, recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaAdmin, recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { gravarChaveDaAgencia } from '@/lib/encargos-servidor';
 import { listarConfigs } from '@/lib/plataformas/servico';
@@ -33,6 +33,8 @@ async function resposta(exec: ExecutorSQL, tenantId: string, empresa: string | n
 }
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('cobranca');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();
@@ -47,6 +49,8 @@ export async function GET(req: Request) {
 }
 
 export async function PUT(req: Request) {
+  const semModulo = await recusaModulo('cobranca');
+  if (semModulo) return semModulo;
   const recusa = await recusaAdmin();
   if (recusa) return recusa;
   await initDB();

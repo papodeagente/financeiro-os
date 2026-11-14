@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
-import { recusaAcao } from '@/lib/guarda-rota';
+import { recusaAcao, recusaModulo } from '@/lib/guarda-rota';
 import { pode } from '@/lib/permissoes-servidor';
 import { vendaAutorizada } from '@/lib/venda-autorizada';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
@@ -13,6 +13,8 @@ import { lerJson, respostaDeErroDaParteD } from '@/lib/parte-d-rota';
 export const dynamic = 'force-dynamic';
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   await initDB();
   const { id } = await ctx.params;
   const acesso = await vendaAutorizada(id);
@@ -31,6 +33,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 }
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('cancelar_produto');
   if (recusa) return recusa;
   await initDB();

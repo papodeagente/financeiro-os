@@ -24,6 +24,13 @@ export function respostaDoPortal(corpo: unknown, status = 200): NextResponse {
 const NAO_ACHOU = 'Este link não abre mais. Peça um link novo à agência.';
 const DEVAGAR = 'Muitas tentativas em pouco tempo. Espere alguns minutos e abra o link de novo.';
 
+/**
+ * A mesma recusa do token inexistente. As rotas do portal usam também
+ * quando a agência dona do link está sem o módulo de cobrança (14/11/2026):
+ * de fora, os dois casos são iguais.
+ */
+export const respostaLinkNaoAbre = (): NextResponse => respostaDoPortal({ error: NAO_ACHOU }, 404);
+
 export async function porteiroDoPortal(
   req: Request, exec: ExecutorSQL, token: string,
 ): Promise<{ link: LinkAtivo } | { resposta: NextResponse }> {

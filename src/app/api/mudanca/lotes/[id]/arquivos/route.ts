@@ -7,11 +7,14 @@ import { emTransacao } from '@/lib/caixa-atomico';
 import { naRota } from '@/lib/migracao/rota';
 import { adicionarArquivo, ErroMudanca, MAX_BYTES } from '@/lib/migracao/servidor';
 import { arquivoParaTela } from '@/lib/migracao/telas';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('mudanca');
+  if (semModulo) return semModulo;
   return naRota(async ({ tenantId }) => {
     const { id } = await params;
     let form: FormData;

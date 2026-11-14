@@ -4,10 +4,13 @@
 import { NextResponse } from 'next/server';
 import { naRota } from '@/lib/migracao/rota';
 import { listarHistorico } from '@/lib/migracao/historico-leitura';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('mudanca');
+  if (semModulo) return semModulo;
   return naRota(async ({ exec, tenantId }) => {
     const u = new URL(req.url);
     return NextResponse.json(await listarHistorico(exec, tenantId, {

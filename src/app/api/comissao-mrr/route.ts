@@ -4,6 +4,7 @@ import { contextoDoEcossistema, respostaJson as json } from '@/lib/rota-do-ecoss
 import { hojeISO } from '@/lib/money';
 import { AVISO_COMISSAO_VEM_DO_CRM, ComissaoVemDoCrm } from '@/lib/comissao-do-crm';
 import { fonteDaComissao, trocarFonteDaComissao } from '@/lib/comissao-do-crm-servidor';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +21,8 @@ const MES = /^\d{4}-(0[1-9]|1[0-2])$/;
  * mês que chegaram do CRM (`comissoes_crm`). Quem troca é o PUT abaixo.
  */
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('comissoes');
+  if (semModulo) return semModulo;
   try {
     const ctx = await contextoDoEcossistema('ler');
     if ('response' in ctx) return ctx.response;
@@ -55,6 +58,8 @@ export async function GET(req: Request) {
 
 /** { acao: 'gerar', mes }: grava a comissão do mês de cada vendedor e a conta a pagar. */
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('comissoes');
+  if (semModulo) return semModulo;
   try {
     const ctx = await contextoDoEcossistema('escrever');
     if ('response' in ctx) return ctx.response;
@@ -86,6 +91,8 @@ export async function POST(req: Request) {
 
 /** { fonte: 'mrr' | 'crm' }: de onde vem a comissão da conta (as faixas ou o extrato do CRM). */
 export async function PUT(req: Request) {
+  const semModulo = await recusaModulo('comissoes');
+  if (semModulo) return semModulo;
   try {
     const ctx = await contextoDoEcossistema('escrever');
     if ('response' in ctx) return ctx.response;

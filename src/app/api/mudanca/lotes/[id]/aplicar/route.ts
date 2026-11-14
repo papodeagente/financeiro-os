@@ -8,11 +8,14 @@ import { emTransacao } from '@/lib/caixa-atomico';
 import { chaveDeIdempotencia, corpoJson, naRota } from '@/lib/migracao/rota';
 import { avancarAplicacao, guardarResposta, iniciarAplicacao, lerLote, respostaGuardada } from '@/lib/migracao/servidor';
 import { loteParaTela } from '@/lib/migracao/telas';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('mudanca');
+  if (semModulo) return semModulo;
   return naRota(async ({ exec, tenantId }) => {
     const { id } = await params;
     const corpo = await corpoJson(req);

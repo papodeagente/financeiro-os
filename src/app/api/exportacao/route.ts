@@ -5,6 +5,7 @@ import type { ExecutorPermissoes } from '@/lib/permissoes-servidor';
 import { validarDocumento } from '@/lib/exportacao/documento';
 import { formatoDaConsulta } from '@/lib/exportacao/arquivo';
 import { responderExportacao } from '@/lib/exportacao/servidor';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 /**
  * Exportação das telas que montam o relatório no navegador (E7, G3).
@@ -18,6 +19,8 @@ export const dynamic = 'force-dynamic';
 const MAX_BYTES = 12 * 1024 * 1024;
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('relatorios');
+  if (semModulo) return semModulo;
   const sessao = await getSession();
   if (!sessao) return NextResponse.json({ error: 'Sessão necessária.' }, { status: 401 });
   const tamanho = Number(req.headers.get('content-length') ?? 0);

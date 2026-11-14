@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { hojeISO } from '@/lib/money';
 import { contasPermitidas } from '@/lib/permissoes-servidor';
@@ -14,6 +14,8 @@ export const dynamic = 'force-dynamic';
 const HEADERS = { 'Cache-Control': 'private, no-store' };
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();

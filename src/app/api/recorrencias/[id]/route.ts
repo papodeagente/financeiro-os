@@ -14,10 +14,13 @@ import {
   carregarSerie, editarSerieNoExecutor, encerrarSerieNoExecutor, ErroRecorrencia, resumoDaSerie, titulosDaSerie,
   type PedidoDeEdicao,
 } from '@/lib/recorrencia-servidor';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 type Contexto = { params: Promise<{ id: string }> };
 
 export async function GET(_req: Request, { params }: Contexto) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   return rodarRota('ler', async ({ tenantId, tx }) => {
     const { id } = await params;
     return tx(async exec => {
@@ -36,6 +39,8 @@ export async function GET(_req: Request, { params }: Contexto) {
 }
 
 export async function PUT(req: Request, { params }: Contexto) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   return rodarRota('escrever', async ({ tenantId, tx }) => {
     const { id } = await params;
     const corpo = await lerCorpo(req);
@@ -51,6 +56,8 @@ export async function PUT(req: Request, { params }: Contexto) {
 }
 
 export async function DELETE(req: Request, { params }: Contexto) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   const url = new URL(req.url);
   const previa = url.searchParams.get('previa') === '1';
   return rodarRota(previa ? 'escrever' : 'excluir', async ({ tenantId, hoje, tx }) => {

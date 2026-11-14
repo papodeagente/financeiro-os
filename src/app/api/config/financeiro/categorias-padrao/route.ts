@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAdmin } from '@/lib/guarda-rota';
+import { recusaAdmin, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao } from '@/lib/caixa-atomico';
 import { ErroEncargos, garantirCategoriasDeEncargos } from '@/lib/encargos-servidor';
 
@@ -11,6 +11,8 @@ import { ErroEncargos, garantirCategoriasDeEncargos } from '@/lib/encargos-servi
 export const dynamic = 'force-dynamic';
 
 export async function POST() {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   const recusa = await recusaAdmin();
   if (recusa) return recusa;
   await initDB();

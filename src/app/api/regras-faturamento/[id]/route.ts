@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { descricaoDaRegra } from '@/lib/fatura-regras';
 import { carregarRegra, desativarRegra, salvarRegra } from '@/lib/fatura-servidor';
@@ -13,6 +13,8 @@ import { lerJson, respostaDeErroDaFatura, usuarioDaFatura } from '@/lib/fatura-r
 export const dynamic = 'force-dynamic';
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();
@@ -28,6 +30,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 }
 
 export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('escrever');
   if (recusa) return recusa;
   await initDB();
@@ -46,6 +50,8 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('escrever');
   if (recusa) return recusa;
   await initDB();

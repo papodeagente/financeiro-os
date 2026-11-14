@@ -21,6 +21,11 @@ export function esquecerModulos(tenantId?: string): void {
   liberadosCache = null;
 }
 
+/** Os módulos liberados para todas (saas_config 'modulos_liberados'), com o mesmo cache. */
+export async function liberadosDaPlataforma(exec: ExecutorSQL | null = pool as unknown as ExecutorSQL | null): Promise<ModuloId[]> {
+  return exec ? lerLiberados(exec) : [];
+}
+
 async function lerLiberados(exec: ExecutorSQL): Promise<ModuloId[]> {
   if (liberadosCache && Date.now() - liberadosCache.em < VALIDADE_MS) return liberadosCache.valor;
   const { rows } = await exec.query(`SELECT data FROM saas_config WHERE key = 'modulos_liberados' LIMIT 1`)

@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaExclusao, recusaFinanceira, respostaPeriodoFechado } from '@/lib/guarda-rota';
+import { recusaExclusao, recusaFinanceira, respostaPeriodoFechado, recusaModulo } from '@/lib/guarda-rota';
 import { contasPermitidas, pode, type ExecutorPermissoes } from '@/lib/permissoes-servidor';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { hojeISO } from '@/lib/money';
@@ -22,6 +22,8 @@ import { ErroDoLote, executarLote, lerPedido, type QuemPedeLote } from '@/lib/co
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   try {
     const corpo = (await req.json().catch(() => null)) as Record<string, unknown> | null;
     const gravar = corpo?.modo === 'gravar';

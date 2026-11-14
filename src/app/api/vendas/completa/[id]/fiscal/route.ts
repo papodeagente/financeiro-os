@@ -4,12 +4,15 @@ import { vendaAutorizada } from '@/lib/venda-autorizada';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { pode } from '@/lib/permissoes-servidor';
 import { fiscalDaVenda } from '@/lib/venda-fiscal-servidor';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 // Notas fiscais e retenção na fonte da venda, para a ficha (E7). GET → FiscalDaVenda.
 // Como as contas da ficha: precisa ver a aba financeira.
 export const dynamic = 'force-dynamic';
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   await initDB();
   const { id } = await ctx.params;
   const acesso = await vendaAutorizada(id);

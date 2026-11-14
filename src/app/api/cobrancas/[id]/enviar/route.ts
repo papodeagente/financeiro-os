@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao } from '@/lib/guarda-rota';
+import { recusaAcao, recusaModulo } from '@/lib/guarda-rota';
 import { enviarCobranca } from '@/lib/cobranca/servidor';
 import { chaveDe, lerCorpo, quemEsta, respostaDeErroDaCobranca } from '@/lib/cobranca/rota';
 import type { CanalCobranca } from '@/lib/cobranca/config';
@@ -14,6 +14,8 @@ import type { CanalCobranca } from '@/lib/cobranca/config';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('cobranca');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('gerar_boletos');
   if (recusa) return recusa;
   await initDB();

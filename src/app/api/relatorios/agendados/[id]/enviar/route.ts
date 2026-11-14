@@ -3,6 +3,7 @@ import { registrarEventoAuditoria } from '@/lib/audit';
 import { enviarAgendamento, lerAgendamento } from '@/lib/relatorios-agendados/servidor';
 import { CABECALHOS, entrada, erroDaRota } from '@/lib/relatorios-agendados/rota';
 import { permitirChamada } from '@/lib/limite-publico';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 /**
  * "Enviar agora" (E7, G3): monta o relatório do período do envio, cria o link
@@ -12,6 +13,8 @@ import { permitirChamada } from '@/lib/limite-publico';
 export const dynamic = 'force-dynamic';
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('relatorios');
+  if (semModulo) return semModulo;
   const ctx = await entrada('mudar');
   if (ctx instanceof NextResponse) return ctx;
   const { id } = await params;

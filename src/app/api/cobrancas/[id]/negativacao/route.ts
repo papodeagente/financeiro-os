@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao } from '@/lib/guarda-rota';
+import { recusaAcao, recusaModulo } from '@/lib/guarda-rota';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { carregarCobranca } from '@/lib/cobranca/servidor';
 import {
@@ -34,6 +34,8 @@ async function porteiro(id: string): Promise<{ tenantId: string } | { resposta: 
 }
 
 export async function GET(_req: Request, { params }: Params) {
+  const semModulo = await recusaModulo('cobranca');
+  if (semModulo) return semModulo;
   const { id } = await params;
   const p = await porteiro(id);
   if ('resposta' in p) return p.resposta;
@@ -45,6 +47,8 @@ export async function GET(_req: Request, { params }: Params) {
 }
 
 export async function POST(req: Request, { params }: Params) {
+  const semModulo = await recusaModulo('cobranca');
+  if (semModulo) return semModulo;
   const { id } = await params;
   const p = await porteiro(id);
   if ('resposta' in p) return p.resposta;

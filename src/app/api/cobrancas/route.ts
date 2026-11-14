@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao, recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaAcao, recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { contasPermitidas } from '@/lib/permissoes-servidor';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { escopoDaSessao, type ExecutorEmpresas } from '@/lib/empresas-servidor';
@@ -32,6 +32,8 @@ type CorpoDaEmissao = Omit<PedidoDeEmissao, 'itens'> & {
 };
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('cobranca');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();
@@ -58,6 +60,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('cobranca');
+  if (semModulo) return semModulo;
   const corpo = await lerCorpo<CorpoDaEmissao>(req);
   const recusa = await recusaAcao('gerar_boletos');
   if (recusa) return recusa;

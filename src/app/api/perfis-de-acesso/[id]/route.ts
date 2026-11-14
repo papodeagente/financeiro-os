@@ -3,11 +3,13 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { recusaAcao } from '@/lib/guarda-rota';
+import { recusaAcao, recusaModulo } from '@/lib/guarda-rota';
 import { excluirGrupo, tenantDaSessao, type ExecutorPermissoes } from '@/lib/permissoes-servidor';
 import { respostaDeErro } from '@/lib/permissoes-rota';
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   try {
     await initDB();
     const recusa = await recusaAcao('gerenciar_usuarios');

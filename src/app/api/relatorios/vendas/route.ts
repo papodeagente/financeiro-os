@@ -12,6 +12,7 @@ import { nomeDoArquivo } from '@/lib/exportacao/documento';
 import { responderExportacao } from '@/lib/exportacao/servidor';
 import { registrarEventoAuditoria } from '@/lib/audit';
 import { escopoDaSessao, type ExecutorEmpresas } from '@/lib/empresas-servidor';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 /**
  * Relatórios de vendas (E5, parte F; filtros, pagamentos e exportação na E7).
@@ -33,6 +34,8 @@ import { escopoDaSessao, type ExecutorEmpresas } from '@/lib/empresas-servidor';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('relatorios');
+  if (semModulo) return semModulo;
   const sessao = await getSession();
   if (!sessao) return NextResponse.json({ error: 'Sessao necessaria' }, { status: 401 });
   await initDB();

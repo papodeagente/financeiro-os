@@ -8,6 +8,7 @@ import { STATUS_DE_BAIXA } from '@/lib/guarda-baixa';
 import {
   entidadeDoHistorico, eventosDoHistorico, referenciasCitadas, type NomesDeReferencia,
 } from '@/lib/historico-do-registro';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 /**
  * Aba Histórico de um título ou cadastro (06/11/2026, E7). Somente leitura:
@@ -29,6 +30,8 @@ const LIMITE_DE_EVENTOS = 2000;
 const resposta = (corpo: unknown, status = 200) => NextResponse.json(corpo, { status, headers: HEADERS });
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   try {
     const sessao = await getSession();
     if (!sessao) return resposta({ error: 'Sessão necessária.' }, 401);

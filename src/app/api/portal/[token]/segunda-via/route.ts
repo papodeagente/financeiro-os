@@ -1,6 +1,7 @@
 import pool, { initDB } from '@/lib/db';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
-import { porteiroDoPortal, respostaDoPortal } from '@/lib/cobranca/portal-porteiro';
+import { porteiroDoPortal, respostaDoPortal, respostaLinkNaoAbre } from '@/lib/cobranca/portal-porteiro';
+import { recusaModuloDaAgencia } from '@/lib/guarda-rota';
 import { segundaViaPeloPortal } from '@/lib/cobranca/portal-segunda-via';
 import { hojeEmBrasilia } from '@/lib/cobranca/servidor';
 import { ErroCobranca, ErroProvedor } from '@/lib/cobranca/tipos';
@@ -24,6 +25,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     const exec = pool as unknown as ExecutorSQL;
     const p = await porteiroDoPortal(req, exec, token);
     if ('resposta' in p) return p.resposta;
+    const semModulo = await recusaModuloDaAgencia(p.link.tenant_id, 'cobranca', respostaLinkNaoAbre);
+    if (semModulo) return semModulo;
     const corpo = (await req.json().catch(() => null)) as { conta?: unknown } | null;
     const r = await segundaViaPeloPortal(exec, p.link, corpo?.conta, hojeEmBrasilia());
     return respostaDoPortal(r);

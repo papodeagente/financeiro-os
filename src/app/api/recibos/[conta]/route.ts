@@ -4,7 +4,7 @@ import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { formatarDocumento } from '@/lib/cliente-documento';
-import { recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { hojeISO } from '@/lib/money';
 import { contasPermitidas } from '@/lib/permissoes-servidor';
 import { contaReceberDoTenant, lerRecibo } from '@/lib/cobranca/recibo-servidor';
@@ -22,6 +22,8 @@ export const dynamic = 'force-dynamic';
 const HEADERS = { 'Cache-Control': 'private, no-store' };
 
 export async function GET(req: Request, { params }: { params: Promise<{ conta: string }> }) {
+  const semModulo = await recusaModulo('cobranca');
+  if (semModulo) return semModulo;
   try {
     const recusa = await recusaFinanceira('ler');
     if (recusa) return recusa;

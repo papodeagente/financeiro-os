@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { chaveAnthropic, type Consulta } from '@/lib/config-apis';
 import { detectarTipo } from '@/lib/arquivos';
 import { registrarEventoAuditoria } from '@/lib/audit';
@@ -40,6 +40,8 @@ const MAX_TEXTO = 100_000;
 const MIMES: ReadonlySet<string> = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']);
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('ia');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('escrever');
   if (recusa) return recusa;
   await initDB();
@@ -55,6 +57,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('ia');
+  if (semModulo) return semModulo;
   // Quem lança venda completa (POST /api/vendas/completa) é quem pode ler o voucher.
   const recusa = await recusaFinanceira('escrever');
   if (recusa) return recusa;

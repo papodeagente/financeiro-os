@@ -7,6 +7,7 @@ import { quemEsta } from '@/lib/cobranca/rota';
 import {
   aplicarUnificacao, desfazerUnificacao, ErroUnificacao, planoDeUnificacao, type PlanoComLados,
 } from '@/lib/asaas-unificado/servidor';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 /**
  * Conexão Asaas unificada com o CRM (E7, 06/11/2026).
@@ -44,6 +45,8 @@ async function porteiro(): Promise<NextResponse | null> {
 }
 
 export async function GET() {
+  const semModulo = await recusaModulo('asaas_unificado');
+  if (semModulo) return semModulo;
   try {
     const recusa = await porteiro();
     if (recusa) return recusa;
@@ -55,6 +58,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('asaas_unificado');
+  if (semModulo) return semModulo;
   try {
     const recusa = await porteiro();
     if (recusa) return recusa;

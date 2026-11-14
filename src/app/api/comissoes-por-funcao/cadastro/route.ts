@@ -2,12 +2,15 @@ import { NextResponse } from 'next/server';
 import { contextoDaComissao, respostaDeErroDaComissao } from '@/lib/comissao-rota';
 import { lerCadastro, lerConfigComissao } from '@/lib/comissao-funcoes-servidor';
 import { listarGrupos } from '@/lib/permissoes-servidor';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 // Funções, pessoas, planos e metas, com as listas para escolher (equipe, intermediários, unidades,
 // perfis de acesso para "quem fecha" cada função).
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const semModulo = await recusaModulo('comissoes');
+  if (semModulo) return semModulo;
   const ctx = await contextoDaComissao(['ver_comissoes_todos']);
   if (ctx instanceof NextResponse) return ctx;
   try {

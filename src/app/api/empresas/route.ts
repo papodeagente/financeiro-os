@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAdmin, recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaAdmin, recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { podeGerenciarUsuarios } from '@/lib/permissoes';
 import { emTransacao } from '@/lib/caixa-atomico';
 import {
@@ -18,6 +18,8 @@ export const dynamic = 'force-dynamic';
 const HEADERS = { 'Cache-Control': 'private, no-store' };
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('empresas');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();
@@ -45,6 +47,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('empresas');
+  if (semModulo) return semModulo;
   const recusa = await recusaAdmin();
   if (recusa) return recusa;
   await initDB();

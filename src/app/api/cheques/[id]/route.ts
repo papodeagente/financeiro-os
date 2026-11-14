@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao, recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaAcao, recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { ACOES_DO_CHEQUE, acoesPossiveis, desenharCheque, type AcaoDoCheque } from '@/lib/cheques';
 import { lerCheque, lerConfigDoCheque, marcarImpresso, mudarSituacao, sugestoesDoExtrato } from '@/lib/cheques-servidor';
@@ -35,6 +35,8 @@ async function carregar(id: string) {
 }
 
 export async function GET(_req: Request, { params }: Contexto) {
+  const semModulo = await recusaModulo('cheques');
+  if (semModulo) return semModulo;
   const recusa = (await recusaFinanceira('ler')) ?? (await recusaAcao('ver_conta_bancaria'));
   if (recusa) return recusa;
   const { id } = await params;
@@ -54,6 +56,8 @@ export async function GET(_req: Request, { params }: Contexto) {
 }
 
 export async function PATCH(req: Request, { params }: Contexto) {
+  const semModulo = await recusaModulo('cheques');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('escrever');
   if (recusa) return recusa;
   const { id } = await params;

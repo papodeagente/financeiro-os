@@ -7,8 +7,11 @@
 import { ehPrevia, lerCorpo, rodarRota } from '@/lib/recorrencia-rota';
 import { lerTabela, maisParcelasNoExecutor } from '@/lib/recorrencia-servidor';
 import type { ChavePreset } from '@/lib/recorrencia';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   return rodarRota('escrever', async ({ tenantId, hoje, tx }) => {
     const corpo = await lerCorpo(req);
     const pedido = {

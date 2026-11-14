@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recusaExclusao, recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaExclusao, recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao } from '@/lib/caixa-atomico';
 import { ErroForma, excluirForma, salvarForma } from '@/lib/formas-pagamento-servidor';
 
@@ -15,6 +15,8 @@ function falha(e: unknown) {
 }
 
 export async function PUT(req: Request, { params }: { params: Promise<{ codigo: string }> }) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   try {
     const recusa = await recusaFinanceira('escrever');
     if (recusa) return recusa;
@@ -33,6 +35,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ codigo: 
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ codigo: string }> }) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   try {
     const recusa = (await recusaExclusao()) ?? (await recusaFinanceira('escrever'));
     if (recusa) return recusa;

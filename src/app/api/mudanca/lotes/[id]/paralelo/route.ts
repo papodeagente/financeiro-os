@@ -5,11 +5,14 @@
 import { NextResponse } from 'next/server';
 import { compararMesEmParalelo, relatorioParaTela } from '@/lib/migracao/paralelo';
 import { naRota } from '@/lib/migracao/rota';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('mudanca');
+  if (semModulo) return semModulo;
   return naRota(async ({ exec, tenantId }) => {
     const { id } = await params;
     return NextResponse.json(relatorioParaTela(await compararMesEmParalelo(exec, tenantId, id)));

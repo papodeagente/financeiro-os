@@ -4,6 +4,7 @@ import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { PreferenciaInvalida, gravarPreferencia, lerChave, lerPreferencia, lerValor } from '@/lib/preferencias-usuario';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 /**
  * Preferências da pessoa logada (06/11/2026, E7).
@@ -22,6 +23,8 @@ async function quem() {
 }
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   try {
     const q = await quem();
     if (!q) return NextResponse.json({ error: 'Sessão necessária.' }, { status: 401, headers: HEADERS });
@@ -37,6 +40,8 @@ export async function GET(req: Request) {
 }
 
 export async function PUT(req: Request) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   try {
     const q = await quem();
     if (!q) return NextResponse.json({ error: 'Sessão necessária.' }, { status: 401, headers: HEADERS });

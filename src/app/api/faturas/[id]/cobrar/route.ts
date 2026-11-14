@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao } from '@/lib/guarda-rota';
+import { recusaAcao, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { gravarEmissao, hojeEmBrasilia, previaDaEmissao, type PedidoDeEmissao } from '@/lib/cobranca/servidor';
 import { cobrancaParaTela, gravacaoParaTela } from '@/lib/cobranca/rota';
@@ -19,6 +19,8 @@ export const dynamic = 'force-dynamic';
 const TIPOS: TipoEmissao[] = ['boleto_pix', 'boleto', 'pix'];
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   const recusaFechar = await recusaAcao('fechar_fatura');
   if (recusaFechar) return recusaFechar;
   const recusa = await recusaAcao('gerar_boletos');

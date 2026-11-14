@@ -72,6 +72,8 @@ let ator = { userId: '', tenantId: '' };
 const marcar = () => pg.query(`SELECT set_config('app.audit_context', $1, false)`, [JSON.stringify(ator)]);
 const pool = { query: async (t, v) => { await marcar(); return query(t, v); }, connect: async () => { await marcar(); return { query, release() {} }; } };
 globalThis.__POOL_DE_TESTE__ = pool;
+// Agência na versão completa: as rotas dos módulos conferem (scripts/db-de-teste.mjs).
+globalThis.__VERSAO_DE_TESTE__ = 'completa';
 globalThis.__SESSAO_DE_TESTE__ = null;
 register('./ts-resolve-hook.mjs', import.meta.url);
 register('./db-de-teste-hook.mjs', import.meta.url);

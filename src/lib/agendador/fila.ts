@@ -11,6 +11,8 @@
  */
 import type { ExecutorSQL } from '../caixa-atomico';
 import { generateId } from '../utils';
+import { MODULO_DO_TIPO_NA_FILA, type ModuloId } from '../modulos';
+import type { AgenciasComModulo } from './nucleo';
 
 export interface NovaTarefa {
   tenantId: string;
@@ -49,14 +51,20 @@ export async function enfileirarTarefa(exec: ExecutorSQL, t: NovaTarefa): Promis
 /**
  * Reivindica tarefas vencidas, no máximo `porAgencia` de cada agência e
  * `total` ao todo, marcando-as 'processando'.
+ *
+ * `agenciasPorTipo` (versão por agência, 14/11/2026): o tipo listado ali só
+ * é pego nas agências da lista dele (as que têm o módulo do tipo). A tarefa
+ * de agência sem o módulo fica pendente, sem gastar tentativa, e volta a
+ * andar se o módulo for ligado. Tipo fora do mapa é do motor: vale para todas.
  */
 export async function reivindicarTarefas(
   exec: ExecutorSQL,
-  opts: { porAgencia?: number; total?: number; tipos?: string[] } = {},
+  opts: { porAgencia?: number; total?: number; tipos?: string[]; agenciasPorTipo?: Record<string, string[]> } = {},
 ): Promise<TarefaReivindicada[]> {
   const porAgencia = opts.porAgencia ?? 5;
   const total = opts.total ?? 50;
   const tipos = opts.tipos && opts.tipos.length ? opts.tipos : null;
+  const porTipo = opts.agenciasPorTipo ? JSON.stringify(opts.agenciasPorTipo) : null;
   const { rows } = await exec.query(
     `UPDATE tarefas SET status = 'processando', tentativas = tentativas + 1, atualizado_em = NOW()
       WHERE id IN (
@@ -68,6 +76,7 @@ export async function reivindicarTarefas(
                FROM tarefas
               WHERE status = 'pendente' AND proxima_em <= NOW()
                 AND ($3::text[] IS NULL OR tipo = ANY($3::text[]))
+                AND ($4::jsonb IS NULL OR NOT jsonb_exists($4::jsonb, tipo) OR jsonb_exists($4::jsonb -> tipo, tenant_id))
            ) x
             WHERE x.rn <= $1
             ORDER BY x.rn, x.proxima_em
@@ -76,7 +85,7 @@ export async function reivindicarTarefas(
          FOR UPDATE SKIP LOCKED
       )
       RETURNING id, tenant_id, tipo, chave_idem, tentativas, dados`,
-    [porAgencia, total, tipos],
+    [porAgencia, total, tipos, porTipo],
   );
   return rows.map(r => ({
     id: String(r.id), tenant_id: String(r.tenant_id), tipo: String(r.tipo), chave_idem: String(r.chave_idem),
@@ -136,23 +145,43 @@ export function registrarProcessador(tipo: string, fn: ProcessadorDeTarefa): voi
   PROCESSADORES[tipo] = fn;
 }
 
+/** Para cada tipo de módulo entre `tipos`, as agências com aquele módulo (uma leitura por módulo). */
+export async function agenciasDosTipos(
+  exec: ExecutorSQL, tipos: string[], agenciasComModulo: AgenciasComModulo,
+): Promise<Record<string, string[]>> {
+  const porModulo = new Map<ModuloId, string[]>();
+  const saida: Record<string, string[]> = {};
+  for (const tipo of tipos) {
+    const id = MODULO_DO_TIPO_NA_FILA[tipo];
+    if (!id) continue;
+    if (!porModulo.has(id)) porModulo.set(id, [...(await agenciasComModulo(exec, id))].sort());
+    saida[tipo] = porModulo.get(id)!;
+  }
+  return saida;
+}
+
 /**
  * Uma rodada da fila: reivindica e processa até acabar o orçamento de tempo.
  * Tarefa de tipo sem processador volta para a fila (não se perde).
  */
 export async function processarFila(
   exec: ExecutorSQL,
-  opts: { orcamentoMs?: number; porAgencia?: number; total?: number; agora?: () => number } = {},
+  opts: {
+    orcamentoMs?: number; porAgencia?: number; total?: number; agora?: () => number;
+    /** Liga o filtro por módulo (MODULO_DO_TIPO_NA_FILA): o tipo de um módulo só anda nas agências com ele. */
+    agenciasComModulo?: AgenciasComModulo;
+  } = {},
 ): Promise<{ processadas: number; falhas: number; adiadas: number }> {
   const agora = opts.agora ?? (() => Date.now());
   const fim = agora() + (opts.orcamentoMs ?? 30_000);
   const tipos = Object.keys(PROCESSADORES);
   if (tipos.length === 0) return { processadas: 0, falhas: 0, adiadas: 0 };
+  const agenciasPorTipo = opts.agenciasComModulo ? await agenciasDosTipos(exec, tipos, opts.agenciasComModulo) : undefined;
   let processadas = 0;
   let falhas = 0;
   let adiadas = 0;
   while (agora() < fim) {
-    const lote = await reivindicarTarefas(exec, { porAgencia: opts.porAgencia, total: opts.total, tipos });
+    const lote = await reivindicarTarefas(exec, { porAgencia: opts.porAgencia, total: opts.total, tipos, agenciasPorTipo });
     if (lote.length === 0) break;
     for (const t of lote) {
       try {

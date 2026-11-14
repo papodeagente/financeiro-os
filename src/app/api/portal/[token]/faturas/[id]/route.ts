@@ -1,7 +1,8 @@
 import pool, { initDB } from '@/lib/db';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { hojeISO } from '@/lib/money';
-import { porteiroDoPortal, respostaDoPortal } from '@/lib/cobranca/portal-porteiro';
+import { porteiroDoPortal, respostaDoPortal, respostaLinkNaoAbre } from '@/lib/cobranca/portal-porteiro';
+import { recusaModuloDaAgencia } from '@/lib/guarda-rota';
 import { aprovarNoPortal, contestarNoPortal, ErroFatura, faturasDoPortal } from '@/lib/fatura-servidor';
 import { documentoDaFaturaNoPortal } from '@/lib/cobranca/portal-fatura';
 
@@ -26,6 +27,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     const exec = pool as unknown as ExecutorSQL;
     const p = await porteiroDoPortal(req, exec, token);
     if ('resposta' in p) return p.resposta;
+    const semModulo = await recusaModuloDaAgencia(p.link.tenant_id, 'cobranca', respostaLinkNaoAbre);
+    if (semModulo) return semModulo;
     const doc = await documentoDaFaturaNoPortal(exec, p.link, id);
     if (!doc) return respostaDoPortal({ error: 'Fatura não encontrada.' }, 404);
     return respostaDoPortal(doc);
@@ -46,6 +49,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     const exec = pool as unknown as ExecutorSQL;
     const p = await porteiroDoPortal(req, exec, token);
     if ('resposta' in p) return p.resposta;
+    const semModulo = await recusaModuloDaAgencia(p.link.tenant_id, 'cobranca', respostaLinkNaoAbre);
+    if (semModulo) return semModulo;
     const corpo = (await req.json().catch(() => null)) as { acao?: string; itens?: Array<{ conta_id: string; motivo: string }>; nome?: string } | null;
     const quem = String(corpo?.nome ?? '').trim().slice(0, 120);
     if (corpo?.acao === 'aprovar') await emTransacao(e => aprovarNoPortal(e, p.link, id, quem));

@@ -5,7 +5,7 @@ import { getSession } from '@/lib/auth';
 import { registrarEventoAuditoria } from '@/lib/audit';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { getCanonicalBaseUrl } from '@/lib/canonical-hosts';
-import { recusaAcao, recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaAcao, recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { clienteDaAgencia, criarLink, estadoDoLink, revogarLink, type EstadoDoLink } from '@/lib/cobranca/portal-servidor';
 
 /**
@@ -64,6 +64,8 @@ async function preparar(req: Request, modo: 'ler' | 'escrever') {
 }
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('cobranca');
+  if (semModulo) return semModulo;
   try {
     const p = await preparar(req, 'ler');
     if ('resposta' in p) return p.resposta;
@@ -75,6 +77,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('cobranca');
+  if (semModulo) return semModulo;
   try {
     const p = await preparar(req, 'escrever');
     if ('resposta' in p) return p.resposta;
@@ -91,6 +95,8 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const semModulo = await recusaModulo('cobranca');
+  if (semModulo) return semModulo;
   try {
     const p = await preparar(req, 'escrever');
     if ('resposta' in p) return p.resposta;

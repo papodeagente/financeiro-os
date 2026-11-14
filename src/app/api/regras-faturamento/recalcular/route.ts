@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao } from '@/lib/caixa-atomico';
 import { recalcularVencimentos } from '@/lib/fatura-servidor';
 import { lerJson, respostaDeErroDaFatura, usuarioDaFatura } from '@/lib/fatura-rota';
@@ -12,6 +12,8 @@ import { lerJson, respostaDeErroDaFatura, usuarioDaFatura } from '@/lib/fatura-r
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   const corpo = await lerJson<{ pessoa_id?: string; aplicar?: boolean }>(req);
   const recusa = await recusaFinanceira(corpo?.aplicar === true ? 'escrever' : 'ler');
   if (recusa) return recusa;

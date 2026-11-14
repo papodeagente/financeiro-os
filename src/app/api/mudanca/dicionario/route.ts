@@ -4,9 +4,12 @@
 import { NextResponse } from 'next/server';
 import { naRota } from '@/lib/migracao/rota';
 import { dicionarioParaTela } from '@/lib/migracao/servidor';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const semModulo = await recusaModulo('mudanca');
+  if (semModulo) return semModulo;
   return naRota(async () => NextResponse.json({ listas: dicionarioParaTela() }));
 }

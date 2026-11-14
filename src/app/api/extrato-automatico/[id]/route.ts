@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao, recusaAdmin } from '@/lib/guarda-rota';
+import { recusaAcao, recusaAdmin, recusaModulo } from '@/lib/guarda-rota';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { desconectar, historicoDeLeituras, lerConexao } from '@/lib/extrato-automatico/servidor';
 
@@ -23,6 +23,8 @@ async function conexaoDaAgencia(id: string) {
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('extrato');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('ver_conta_bancaria');
   if (recusa) return recusa;
   const { id } = await params;
@@ -35,6 +37,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('extrato');
+  if (semModulo) return semModulo;
   const admin = await recusaAdmin();
   if (admin) return admin;
   const { id } = await params;

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAdmin, recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaAdmin, recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { aplicarAssistente, prepararAgenciaNova, situacaoDoAssistente } from '@/lib/assistente-inicial-servidor';
 
@@ -14,6 +14,8 @@ import { aplicarAssistente, prepararAgenciaNova, situacaoDoAssistente } from '@/
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();
@@ -23,6 +25,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   const recusa = await recusaAdmin();
   if (recusa) return recusa;
   await initDB();

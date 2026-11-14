@@ -5,13 +5,15 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAdmin } from '@/lib/guarda-rota';
+import { recusaAdmin, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao } from '@/lib/caixa-atomico';
 import { ErroCadastro, previaDaJuncao, juntarCategorias } from '@/lib/centros-custo-servidor';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   try {
     const recusa = await recusaAdmin();
     if (recusa) return recusa;

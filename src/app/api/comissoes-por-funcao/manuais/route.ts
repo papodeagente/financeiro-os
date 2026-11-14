@@ -7,6 +7,7 @@ import { baseDaComissaoManual } from '@/lib/comissao-funcoes';
 import { carregarVenda, lerConfigVenda } from '@/lib/venda-servidor';
 import { pode } from '@/lib/permissoes-servidor';
 import { emTransacao } from '@/lib/caixa-atomico';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 // Comissão manual na venda (indicação, bônus), E7.
 //   GET    ?venda_id=          as manuais da venda, a base do percentual e quem pode receber
@@ -15,6 +16,8 @@ import { emTransacao } from '@/lib/caixa-atomico';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('comissoes');
+  if (semModulo) return semModulo;
   const ctx = await contextoDaComissao(['ver_colunas_comissao']);
   if (ctx instanceof NextResponse) return ctx;
   const vendaId = new URL(req.url).searchParams.get('venda_id') ?? '';
@@ -49,6 +52,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('comissoes');
+  if (semModulo) return semModulo;
   const ctx = await contextoDaComissao(['lancar_comissao_manual']);
   if (ctx instanceof NextResponse) return ctx;
   const corpo = (await req.json().catch(() => null)) as Record<string, unknown> | null;
@@ -60,6 +65,8 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const semModulo = await recusaModulo('comissoes');
+  if (semModulo) return semModulo;
   const ctx = await contextoDaComissao(['lancar_comissao_manual']);
   if (ctx instanceof NextResponse) return ctx;
   const u = new URL(req.url).searchParams;

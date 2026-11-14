@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao } from '@/lib/guarda-rota';
+import { recusaAcao, recusaModulo } from '@/lib/guarda-rota';
 import { pode } from '@/lib/permissoes-servidor';
 import { registrarEventoAuditoria } from '@/lib/audit';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
@@ -31,6 +31,8 @@ function erro(e: unknown) {
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('extrato');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('conciliar');
   if (recusa) return recusa;
   await initDB();
@@ -49,6 +51,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 const ACOES_DA_LINHA = new Set(['aceitar', 'desfazer_aceite', 'ligar', 'descartar_proposta']);
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('extrato');
+  if (semModulo) return semModulo;
   const corpo = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   const acao = String(corpo?.acao ?? '');
   const recusa = await recusaAcao(acao === 'fechar' ? 'fechar_periodo' : acao === 'reabrir' ? 'reabrir_periodo' : 'conciliar');

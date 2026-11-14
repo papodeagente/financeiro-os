@@ -5,8 +5,11 @@ import { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { resumoDePermissoes } from '@/lib/permissoes-servidor';
 import { respostaDeErro } from '@/lib/permissoes-rota';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 export async function GET() {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   try {
     await initDB();
     const sessao = await getSession();

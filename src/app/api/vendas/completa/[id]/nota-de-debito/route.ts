@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
-import { recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { vendaAutorizada } from '@/lib/venda-autorizada';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { carregarVenda } from '@/lib/venda-servidor';
@@ -15,6 +15,8 @@ import { cabecalhoDoDocumento, respostaDeErroDaFatura } from '@/lib/fatura-rota'
 export const dynamic = 'force-dynamic';
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();

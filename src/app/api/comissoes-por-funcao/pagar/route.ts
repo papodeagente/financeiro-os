@@ -2,11 +2,14 @@ import { NextResponse } from 'next/server';
 import { contextoDaComissao, respostaDeErroDaComissao } from '@/lib/comissao-rota';
 import { pagarComissoes } from '@/lib/comissao-funcoes-servidor';
 import { emTransacao } from '@/lib/caixa-atomico';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 // Pagar comissões: { modo: 'TOTAL'|'PARCIAL', pessoas, valor_centavos? } → uma conta por pessoa.
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('comissoes');
+  if (semModulo) return semModulo;
   const ctx = await contextoDaComissao(['pagar_comissoes', 'ver_comissoes_todos']);
   if (ctx instanceof NextResponse) return ctx;
   const corpo = (await req.json().catch(() => null)) as { modo?: string; pessoas?: unknown; valor_centavos?: unknown } | null;

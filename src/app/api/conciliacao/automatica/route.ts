@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao, respostaPeriodoFechado } from '@/lib/guarda-rota';
+import { recusaAcao, respostaPeriodoFechado, recusaModulo } from '@/lib/guarda-rota';
 import { contasPermitidas } from '@/lib/permissoes-servidor';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { ErroConciliacao } from '@/lib/conciliacao-servidor';
@@ -40,6 +40,8 @@ function erro(e: unknown) {
 }
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('extrato');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('conciliar');
   if (recusa) return recusa;
   await initDB();
@@ -70,6 +72,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('extrato');
+  if (semModulo) return semModulo;
   const corpo = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   const acao = String(corpo?.acao ?? '');
   const contaPedida = corpo?.conta_bancaria_id ? String(corpo.conta_bancaria_id) : null;

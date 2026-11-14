@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { conferirSegundoFatorDoPagador, recusaFinanceira, respostaPeriodoFechado } from '@/lib/guarda-rota';
+import { conferirSegundoFatorDoPagador, recusaFinanceira, respostaPeriodoFechado, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { ErroBaixa, historicoDaConta, registrarBaixas, type ItemBaixa } from '@/lib/baixas-servidor';
 import type { TituloTabela } from '@/lib/baixa-calculo';
@@ -33,6 +33,8 @@ function erro(e: unknown) {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   const corpo = (await req.json().catch(() => null)) as {
     modo?: string; itens?: ItemBaixa[]; assinatura?: string; pedir_aprovacao?: boolean; motivo?: string;
   } | null;
@@ -118,6 +120,8 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();

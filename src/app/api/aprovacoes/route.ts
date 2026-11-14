@@ -6,7 +6,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { conferirSegundoFatorDoPagador, recusaFinanceira } from '@/lib/guarda-rota';
+import { conferirSegundoFatorDoPagador, recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import '@/lib/aprovacoes-executores';
 import {
   decidirPedido, expirarVencidos, listarPedidos, marcarQuemPodeDecidir, pedirAprovacaoDoPagamento,
@@ -16,6 +16,8 @@ import { tenantDaSessao, type ExecutorPermissoes } from '@/lib/permissoes-servid
 import { corpoJson, respostaDeErro } from '@/lib/permissoes-rota';
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   try {
     await initDB();
     const recusa = await recusaFinanceira('ler');
@@ -37,6 +39,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   try {
     await initDB();
     const recusa = await recusaFinanceira('escrever');

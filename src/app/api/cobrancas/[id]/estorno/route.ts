@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao } from '@/lib/guarda-rota';
+import { recusaAcao, recusaModulo } from '@/lib/guarda-rota';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { carregarCobranca, pedirEstorno } from '@/lib/cobranca/servidor';
 import { cobrancaParaTela, lerCorpo, quemEsta, respostaDeErroDaCobranca } from '@/lib/cobranca/rota';
@@ -12,6 +12,8 @@ import { cobrancaParaTela, lerCorpo, quemEsta, respostaDeErroDaCobranca } from '
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('cobranca');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('estornar_baixa');
   if (recusa) return recusa;
   await initDB();

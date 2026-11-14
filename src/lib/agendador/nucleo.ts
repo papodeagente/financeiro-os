@@ -13,6 +13,7 @@
  * - cada chamada tem orçamento de tempo; o que não coube continua na próxima.
  */
 import type { ExecutorSQL } from '../caixa-atomico';
+import type { ModuloId } from '../modulos';
 
 export interface ContextoTarefa {
   exec: ExecutorSQL;
@@ -31,7 +32,17 @@ export interface DefinicaoTarefa {
   agencias?: (ctx: ContextoTarefa) => Promise<string[]>;
   /** Trabalho de uma agência (ou global, com tenantId = ''). */
   executar: (ctx: ContextoTarefa, tenantId: string) => Promise<Record<string, unknown> | void>;
+  /**
+   * Módulo da tarefa (versão por agência, 14/11/2026; src/lib/modulos.ts,
+   * MODULO_DA_TAREFA). Com `agenciasComModulo` no rodarAgendador, a tarefa
+   * por agência só atende as agências com o módulo; 'motor' atende todas.
+   * Tarefa global (sem `agencias`) continua global.
+   */
+  modulo?: ModuloId | 'motor';
 }
+
+/** As agências com o módulo ligado (modulos-servidor.ts: agenciasComModulo). */
+export type AgenciasComModulo = (exec: ExecutorSQL, id: ModuloId) => Promise<Set<string>>;
 
 export const FALHAS_PARA_ABRIR = 5;
 export const MINUTOS_DISJUNTOR = 30;
@@ -130,6 +141,13 @@ export async function rodarAgendador(params: {
   agora?: Date;
   orcamentoMs?: number;
   relogio?: () => number;
+  /**
+   * Liga o filtro por módulo: cada tarefa por agência só atende as agências
+   * com o módulo dela. Tarefa por agência SEM módulo declarado não atende
+   * ninguém (e avisa no log): rodar para todas seria ligar uma parte da
+   * versão completa na agência simples sem ninguém ter decidido.
+   */
+  agenciasComModulo?: AgenciasComModulo;
 }): Promise<ResumoAgendador> {
   const relogio = params.relogio ?? (() => Date.now());
   const inicio = relogio();
@@ -150,7 +168,16 @@ export async function rodarAgendador(params: {
           exec, emTransacao: params.emTransacao, agora,
           restanteMs: () => Math.max(0, orcamento - (relogio() - inicio)),
         };
-        const alvos = t.agencias ? await t.agencias(ctx) : [''];
+        let alvos = t.agencias ? await t.agencias(ctx) : [''];
+        if (t.agencias && params.agenciasComModulo && t.modulo !== 'motor') {
+          if (!t.modulo) {
+            console.error(`[agendador] ${t.nome}: tarefa por agência sem módulo declarado (modulos.ts, MODULO_DA_TAREFA); não roda.`);
+            alvos = [];
+          } else {
+            const com = await params.agenciasComModulo(exec, t.modulo);
+            alvos = alvos.filter(a => com.has(a));
+          }
+        }
         for (const tenantId of alvos) {
           if (ctx.restanteMs() <= 0) { r.puladas++; continue; }
           if (await disjuntorAberto(exec, t.nome, tenantId)) { r.puladas++; continue; }

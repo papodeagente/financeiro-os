@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao, recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaAcao, recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { listarRetencoes, salvarRetencao } from '@/lib/nota-retencoes-servidor';
 import { respostaDeErroDaNota } from '@/lib/nota-regras-rota';
@@ -10,6 +10,8 @@ import { respostaDeErroDaNota } from '@/lib/nota-regras-rota';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('notas');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();
@@ -19,6 +21,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('notas');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('configurar_notas');
   if (recusa) return recusa;
   await initDB();

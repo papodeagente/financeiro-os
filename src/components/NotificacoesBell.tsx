@@ -39,6 +39,8 @@ import {
   TIPOS_NOTIFICACAO,
   type PreferenciasNotificacoes,
 } from '@/lib/notificacoes-config';
+import { useModulos } from '@/components/useModulos';
+import { avisoLiberado } from '@/lib/modulos';
 
 interface Notificacao {
   id: string;
@@ -345,6 +347,10 @@ function preferenceSignature(preferences: PreferenciasNotificacoes): string {
 export function NotificacoesBell() {
   const router = useRouter();
   const { user } = useAuth();
+  // Tipos de aviso que só existem com um módulo da versão completa (modulos.ts,
+  // MODULO_DO_AVISO) somem do filtro e das preferências da agência sem ele.
+  const { ligados } = useModulos();
+  const tiposDaConta = useMemo(() => CONFIGURED_TYPES.filter(tipo => avisoLiberado({ ligados }, tipo)), [ligados]);
   const panelId = useId();
   const titleId = `${panelId}-title`;
   const activitiesTabId = `${panelId}-activities-tab`;
@@ -403,8 +409,8 @@ export function NotificacoesBell() {
   loadedPageRef.current = loadedPage;
 
   const availableTypes = useMemo(
-    () => Array.from(new Set([...CONFIGURED_TYPES, ...items.map(item => item.tipo)])),
-    [items],
+    () => Array.from(new Set([...tiposDaConta, ...items.map(item => item.tipo)])),
+    [items, tiposDaConta],
   );
   const preferencesDirty = useMemo(
     () => preferenceSignature(preferenceDraft) !== preferenceSignature(preferences),
@@ -1324,7 +1330,7 @@ export function NotificacoesBell() {
                 <legend className="text-xs font-semibold text-[var(--t-text)]">Tipos de notificação</legend>
                 <p className="mt-0.5 text-[11px] text-[var(--t-text-muted)]">Escolha quais eventos devem aparecer para você.</p>
                 <div className="mt-3 space-y-1">
-                  {CONFIGURED_TYPES.map(tipo => {
+                  {tiposDaConta.map(tipo => {
                     const Icon = ICON_FOR_TIPO[tipo] ?? Bell;
                     const enabled = preferenceDraft.tipos[tipo] !== false;
                     return (

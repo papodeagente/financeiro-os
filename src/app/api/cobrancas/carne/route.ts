@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao } from '@/lib/guarda-rota';
+import { recusaAcao, recusaModulo } from '@/lib/guarda-rota';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { gravarCarne, hojeEmBrasilia, previaDoCarne, type PedidoDeCarneNaTela } from '@/lib/cobranca/servidor';
 import {
@@ -18,6 +18,8 @@ import {
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('cobranca');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('gerar_boletos');
   if (recusa) return recusa;
   const corpo = await lerCorpo<Partial<PedidoDeCarneNaTela> & { contas?: string[]; modo?: string; assinatura?: string }>(req);

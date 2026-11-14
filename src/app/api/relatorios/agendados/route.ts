@@ -4,11 +4,14 @@ import { crmLigado } from '@/lib/cobranca/crm';
 import { validarAgendamento } from '@/lib/relatorios-agendados/regras';
 import { listarAgendamentos, salvarAgendamento } from '@/lib/relatorios-agendados/servidor';
 import { CABECALHOS, autorDaSessao, entrada, erroDaRota, recusaDoRelatorio } from '@/lib/relatorios-agendados/rota';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 /** Envios agendados de relatório (E7, G3). Contrato em src/lib/relatorios-agendados/rota.ts. */
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const semModulo = await recusaModulo('relatorios');
+  if (semModulo) return semModulo;
   const ctx = await entrada('ler');
   if (ctx instanceof NextResponse) return ctx;
   try {
@@ -20,6 +23,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('relatorios');
+  if (semModulo) return semModulo;
   const ctx = await entrada('mudar');
   if (ctx instanceof NextResponse) return ctx;
   let corpo: Record<string, unknown>;

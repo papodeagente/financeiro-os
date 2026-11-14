@@ -5,7 +5,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { recusaAcao } from '@/lib/guarda-rota';
+import { recusaAcao, recusaModulo } from '@/lib/guarda-rota';
 import { acoesDoTeto, acoesPorModulo } from '@/lib/acoes-financeiras';
 import {
   listarGrupos, listarRestricoesDeUsuarios, salvarGrupo, salvarRestricaoDeUsuario, tenantDaSessao,
@@ -15,6 +15,8 @@ import { contasDaAgencia, corpoJson, respostaDeErro, usuariosDaAgencia } from '@
 import { emTransacao } from '@/lib/caixa-atomico';
 
 export async function GET() {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   try {
     await initDB();
     const recusa = await recusaAcao('gerenciar_usuarios');
@@ -38,6 +40,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   try {
     await initDB();
     const recusa = await recusaAcao('gerenciar_usuarios');

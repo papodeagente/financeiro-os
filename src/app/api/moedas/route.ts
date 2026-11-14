@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { MOEDAS, MOEDAS_PTAX_DISPONIVEIS } from '@/lib/cambio';
 import { ErroMoeda, lerCatalogoDaAgencia, salvarMoedaDaAgencia } from '@/lib/moedas-servidor';
@@ -12,6 +12,8 @@ import { ErroMoeda, lerCatalogoDaAgencia, salvarMoedaDaAgencia } from '@/lib/moe
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const semModulo = await recusaModulo('cambio');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();
@@ -20,6 +22,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('cambio');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('escrever');
   if (recusa) return recusa;
   await initDB();

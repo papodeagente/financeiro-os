@@ -11,6 +11,37 @@ import {
 } from './segundo-fator-pagador';
 import { hojeISO } from './money';
 import { MENSAGEM_CONTA_SO_VER } from './conta-da-gravacao';
+import { exigirModulo } from './modulos-servidor';
+import type { ModuloId } from './modulos';
+
+/**
+ * Rota de um módulo da versão completa (modulos.ts, APIS_DOS_MODULOS): a
+ * agência da sessão sem o módulo recebe 404, como se a rota não existisse.
+ * Primeira linha de cada handler; o teste scripts/test-modulos-rotas.ts
+ * confere que nenhuma rota do catálogo ficou sem ela. Sem sessão, deixa a
+ * rota responder o 401 dela de sempre.
+ */
+export async function recusaModulo(id: ModuloId): Promise<NextResponse | null> {
+  const sessao = await getSession();
+  if (!sessao) return null;
+  const tenantId = sessao.impersonatingTenantId || sessao.tenantId || '';
+  const fora = await exigirModulo(tenantId, id);
+  return fora ? NextResponse.json({ error: fora.erro }, { status: fora.status }) : null;
+}
+
+/**
+ * Rota pública (link do cliente, link de leitura): confere o módulo da
+ * AGÊNCIA DONA do token, nunca o de quem abriu. `resposta` é a recusa que a
+ * rota já dá para token inválido, para o link de agência sem o módulo ser
+ * indistinguível de um link que não existe.
+ */
+export async function recusaModuloDaAgencia(
+  tenantId: string, id: ModuloId, resposta?: () => NextResponse,
+): Promise<NextResponse | null> {
+  const fora = await exigirModulo(tenantId, id);
+  if (!fora) return null;
+  return resposta ? resposta() : NextResponse.json({ error: fora.erro }, { status: fora.status });
+}
 
 export async function recusaFinanceira(modo: 'ler' | 'escrever'): Promise<NextResponse | null> {
   const sessao = await getSession();

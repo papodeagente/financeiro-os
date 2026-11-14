@@ -1,0 +1,445 @@
+{
+ "_sobre": "Menu lateral, ⌘K e tipos de aviso da versão SIMPLES (origin/main a9fd7cf, 13/11/2026), congelados para scripts/test-modulos-menu.ts: a agência sem módulos vê exatamente isto.",
+ "commit": "a9fd7cf",
+ "menu": {
+  "planejamento": [
+   {
+    "title": "Planejamento",
+    "items": [
+     {
+      "key": "custos-negocio",
+      "label": "Custos do negócio",
+      "href": "/planejamento/custos"
+     },
+     {
+      "key": "mapas-mentais",
+      "label": "Mapa mental",
+      "href": "/planejamento/mapas-mentais"
+     }
+    ]
+   }
+  ],
+  "metas": [
+   {
+    "title": "Visão geral",
+    "items": [
+     {
+      "key": "dashboard-kpi",
+      "label": "Dashboard",
+      "href": "/dashboard"
+     },
+     {
+      "key": "metas-ranking",
+      "label": "Metas da equipe",
+      "href": "/equipe/metas"
+     }
+    ]
+   },
+   {
+    "title": "Equipe",
+    "items": [
+     {
+      "key": "comissoes",
+      "label": "Comissões",
+      "href": "/equipe/comissoes"
+     },
+     {
+      "key": "vendedores",
+      "label": "Vendedores e planos",
+      "href": "/equipe/vendedores"
+     },
+     {
+      "key": "folha",
+      "label": "Folha",
+      "href": "/equipe/folha"
+     },
+     {
+      "key": "planos-comissao",
+      "label": "Planos de comissão",
+      "href": "/equipe/planos-comissao"
+     }
+    ]
+   }
+  ],
+  "financeiro": [
+   {
+    "title": "Visão geral",
+    "items": [
+     {
+      "key": "fin-hub",
+      "label": "Visão geral",
+      "href": "/financeiro-ag"
+     },
+     {
+      "key": "fluxo-caixa",
+      "label": "Fluxo de caixa",
+      "href": "/financeiro-ag/fluxo-caixa"
+     },
+     {
+      "key": "dre",
+      "label": "Resultado do mês",
+      "href": "/financeiro-ag/dre"
+     }
+    ]
+   },
+   {
+    "title": "Dia a dia",
+    "items": [
+     {
+      "key": "receber",
+      "label": "Contas a receber",
+      "href": "/financeiro-ag/receber"
+     },
+     {
+      "key": "pagar",
+      "label": "Contas a pagar",
+      "href": "/financeiro-ag/pagar"
+     },
+     {
+      "key": "conciliacao",
+      "label": "Conciliação",
+      "href": "/financeiro-ag/conciliacao"
+     },
+     {
+      "key": "notas-fiscais",
+      "label": "Notas fiscais",
+      "href": "/financeiro-ag/notas"
+     },
+     {
+      "key": "transferencias",
+      "label": "Transferências",
+      "href": "/financeiro-ag/transferencias"
+     }
+    ]
+   },
+   {
+    "title": "Cadastros",
+    "items": [
+     {
+      "key": "clientes",
+      "label": "Clientes",
+      "href": "/pessoas/clientes"
+     },
+     {
+      "key": "fornecedores",
+      "label": "Fornecedores",
+      "href": "/pessoas/fornecedores"
+     },
+     {
+      "key": "contas-bancarias",
+      "label": "Contas bancárias",
+      "href": "/financeiro-ag/contas-bancarias"
+     },
+     {
+      "key": "cartoes-corp",
+      "label": "Cartões",
+      "href": "/financeiro-ag/cartoes"
+     },
+     {
+      "key": "plano-contas",
+      "label": "Categorias",
+      "href": "/financeiro-ag/plano-contas"
+     }
+    ]
+   }
+  ],
+  "configuracoes": [
+   {
+    "title": "Geral",
+    "items": [
+     {
+      "key": "cfg-agencia",
+      "label": "Dados da agência",
+      "href": "/config/agencia"
+     },
+     {
+      "key": "cfg-usuarios",
+      "label": "Usuários",
+      "href": "/config/usuarios"
+     }
+    ]
+   },
+   {
+    "title": "Integrações",
+    "items": [
+     {
+      "key": "cfg-plataformas",
+      "label": "Plataformas de venda",
+      "href": "/config/plataformas"
+     },
+     {
+      "key": "cfg-integracoes",
+      "label": "Integrações",
+      "href": "/config/integracoes"
+     }
+    ]
+   },
+   {
+    "title": "Sistema",
+    "items": [
+     {
+      "key": "cfg-suporte",
+      "label": "Suporte",
+      "href": "/suporte"
+     },
+     {
+      "key": "cfg-auditoria",
+      "label": "Auditoria",
+      "href": "/config/auditoria"
+     },
+     {
+      "key": "cfg-reset",
+      "label": "Resetar dados",
+      "href": "/config/reset"
+     }
+    ]
+   }
+  ]
+ },
+ "paleta": {
+  "navegacao": [
+   {
+    "id": "dashboard",
+    "label": "Dashboard",
+    "href": "/dashboard",
+    "section": "navegacao"
+   },
+   {
+    "id": "grupos",
+    "label": "Produtos",
+    "href": "/grupos",
+    "section": "navegacao"
+   },
+   {
+    "id": "propostas",
+    "label": "Propostas",
+    "href": "/propostas",
+    "section": "navegacao"
+   },
+   {
+    "id": "orcamentos",
+    "label": "Orçamentos",
+    "href": "/vendas/orcamentos",
+    "section": "navegacao"
+   },
+   {
+    "id": "vendas",
+    "label": "Vendas fechadas",
+    "href": "/vendas",
+    "section": "navegacao"
+   },
+   {
+    "id": "voos",
+    "label": "Buscar voos",
+    "href": "/voos",
+    "section": "navegacao"
+   },
+   {
+    "id": "hoteis",
+    "label": "Buscar hotéis",
+    "href": "/hoteis",
+    "section": "navegacao"
+   },
+   {
+    "id": "destinos",
+    "label": "Destinos",
+    "href": "/destinos",
+    "section": "navegacao"
+   },
+   {
+    "id": "fluxo",
+    "label": "Fluxo de caixa",
+    "href": "/financeiro-ag/fluxo-caixa",
+    "section": "navegacao"
+   },
+   {
+    "id": "dre",
+    "label": "Resultado do mês (DRE)",
+    "href": "/financeiro-ag/dre",
+    "section": "navegacao"
+   },
+   {
+    "id": "lucro-real",
+    "label": "Lucro real",
+    "href": "/relatorios/lucro-real",
+    "section": "navegacao"
+   },
+   {
+    "id": "receber",
+    "label": "Contas a receber",
+    "href": "/financeiro-ag/receber",
+    "section": "navegacao"
+   },
+   {
+    "id": "pagar",
+    "label": "Contas a pagar",
+    "href": "/financeiro-ag/pagar",
+    "section": "navegacao"
+   },
+   {
+    "id": "conciliacao",
+    "label": "Conciliação",
+    "href": "/financeiro-ag/conciliacao",
+    "section": "navegacao"
+   },
+   {
+    "id": "transferencias",
+    "label": "Transferências",
+    "href": "/financeiro-ag/transferencias",
+    "section": "navegacao"
+   },
+   {
+    "id": "plano-contas",
+    "label": "Categorias (plano de contas)",
+    "href": "/financeiro-ag/plano-contas",
+    "section": "navegacao"
+   },
+   {
+    "id": "recebimentos",
+    "label": "Recebimentos das plataformas",
+    "href": "/financeiro-ag/recebimentos",
+    "section": "navegacao"
+   },
+   {
+    "id": "notas",
+    "label": "Notas fiscais",
+    "href": "/financeiro-ag/notas",
+    "section": "navegacao"
+   },
+   {
+    "id": "cartoes",
+    "label": "Cartões",
+    "href": "/financeiro-ag/cartoes",
+    "section": "navegacao"
+   },
+   {
+    "id": "taxas",
+    "label": "Taxas de pagamento",
+    "href": "/relatorios/taxas",
+    "section": "navegacao"
+   },
+   {
+    "id": "comparativo",
+    "label": "Comparativo mensal",
+    "href": "/relatorios/comparativo",
+    "section": "navegacao"
+   },
+   {
+    "id": "contas-bancarias",
+    "label": "Contas bancárias",
+    "href": "/financeiro-ag/contas-bancarias",
+    "section": "navegacao"
+   },
+   {
+    "id": "fin-grupos",
+    "label": "Financeiro por produto",
+    "href": "/financeiro-grupos",
+    "section": "navegacao"
+   },
+   {
+    "id": "clientes",
+    "label": "Clientes",
+    "href": "/pessoas/clientes",
+    "section": "navegacao"
+   },
+   {
+    "id": "fornecedores",
+    "label": "Fornecedores",
+    "href": "/pessoas/fornecedores",
+    "section": "navegacao"
+   },
+   {
+    "id": "equipe",
+    "label": "Equipe",
+    "href": "/pessoas/equipe",
+    "section": "navegacao"
+   },
+   {
+    "id": "metas",
+    "label": "Metas da equipe",
+    "href": "/equipe/metas",
+    "section": "navegacao"
+   },
+   {
+    "id": "comissoes",
+    "label": "Comissões",
+    "href": "/equipe/comissoes",
+    "section": "navegacao"
+   },
+   {
+    "id": "planos-comissao",
+    "label": "Planos de comissão",
+    "href": "/equipe/planos-comissao",
+    "section": "navegacao"
+   },
+   {
+    "id": "custos",
+    "label": "Custos do negócio",
+    "href": "/planejamento/custos",
+    "section": "navegacao"
+   },
+   {
+    "id": "relatorios",
+    "label": "Relatórios financeiros",
+    "href": "/relatorios/financeiro",
+    "section": "navegacao"
+   },
+   {
+    "id": "cac",
+    "label": "Dashboard CAC",
+    "href": "/cac/dashboard",
+    "section": "navegacao"
+   },
+   {
+    "id": "rentabilidade",
+    "label": "Rentabilidade",
+    "href": "/relatorios/rentabilidade",
+    "section": "navegacao"
+   },
+   {
+    "id": "config-agencia",
+    "label": "Configurações",
+    "href": "/config/agencia",
+    "section": "navegacao"
+   }
+  ],
+  "criar": [
+   {
+    "id": "novo-grupo",
+    "label": "Novo produto",
+    "href": "/grupos",
+    "section": "criar"
+   },
+   {
+    "id": "nova-proposta",
+    "label": "Nova proposta",
+    "href": "/propostas/nova",
+    "section": "criar"
+   },
+   {
+    "id": "nova-venda",
+    "label": "Nova venda",
+    "href": "/vendas/nova",
+    "section": "criar"
+   }
+  ],
+  "crm": [
+   {
+    "id": "crm-status",
+    "label": "Status da integração CRM",
+    "href": "/config/crm",
+    "section": "crm"
+   }
+  ]
+ },
+ "placeholder": "Buscar paginas, criar...",
+ "avisos": [
+  "PROPOSTA_ACEITA",
+  "PROPOSTA_FEEDBACK",
+  "PROPOSTA_VISUALIZADA",
+  "PROPOSTA_LEAD",
+  "VENDA_RECEBIMENTO_A_DEFINIR",
+  "VENDA_VENDEDOR_NAO_CADASTRADO",
+  "VENDA_CANCELADA_CRM"
+ ]
+}

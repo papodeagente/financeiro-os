@@ -5,6 +5,7 @@ import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { hojeISO } from '@/lib/money';
 import { lerReciboDaVenda } from '@/lib/recibo-da-venda-servidor';
 import { registrarReciboDaVenda } from '@/lib/recibo-emitido';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 // Recibo da venda (E7): GET ?pagante=<chave> → { recibo, pagantes }; sem pagamento recebido → 422 { error, pagantes }.
 // Quem vê a venda vê o recibo (o vendedor sem "ver vendas de todos" só as dele).
@@ -15,6 +16,8 @@ export const dynamic = 'force-dynamic';
 const HEADERS = { 'Cache-Control': 'private, no-store' };
 
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   await initDB();
   const { id } = await ctx.params;
   const acesso = await vendaAutorizada(id);
@@ -32,6 +35,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
 }
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   await initDB();
   const { id } = await ctx.params;
   const acesso = await vendaAutorizada(id);

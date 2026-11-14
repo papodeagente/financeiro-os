@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao } from '@/lib/guarda-rota';
+import { recusaAcao, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { clienteHttpMtls } from '@/lib/extrato-automatico/http-mtls';
 import { lerConexao, sincronizarConexao } from '@/lib/extrato-automatico/servidor';
@@ -15,6 +15,8 @@ import { lerConexao, sincronizarConexao } from '@/lib/extrato-automatico/servido
 export const dynamic = 'force-dynamic';
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('extrato');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('conciliar');
   if (recusa) return recusa;
   const { id } = await params;

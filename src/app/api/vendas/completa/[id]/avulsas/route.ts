@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
-import { recusaAcao, recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaAcao, recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { vendaAutorizada } from '@/lib/venda-autorizada';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { lancarAvulsaDaVenda } from '@/lib/venda-avulsas';
@@ -15,6 +15,8 @@ import { montarFicha, respostaDeErroDaVenda, usuarioDa } from '@/lib/venda-rota'
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   const recusa = (await recusaFinanceira('escrever')) ?? (await recusaAcao('ver_aba_financeiro'));
   if (recusa) return recusa;
   await initDB();

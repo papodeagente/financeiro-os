@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao } from '@/lib/caixa-atomico';
 import { ErroMoeda, salvarMoedaDaAgencia } from '@/lib/moedas-servidor';
 import { normalizarCodigo } from '@/lib/moedas';
@@ -12,6 +12,8 @@ import { normalizarCodigo } from '@/lib/moedas';
 export const dynamic = 'force-dynamic';
 
 export async function PUT(req: Request, { params }: { params: Promise<{ codigo: string }> }) {
+  const semModulo = await recusaModulo('cambio');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('escrever');
   if (recusa) return recusa;
   await initDB();

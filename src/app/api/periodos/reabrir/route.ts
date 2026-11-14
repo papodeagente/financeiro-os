@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao, recusaAdmin } from '@/lib/guarda-rota';
+import { recusaAcao, recusaAdmin, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao } from '@/lib/caixa-atomico';
 import { reabrirPeriodo } from '@/lib/periodo-fechado';
 import { registrarEventoAuditoria } from '@/lib/audit';
@@ -13,6 +13,8 @@ import { registrarEventoAuditoria } from '@/lib/audit';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   const corpo = (await req.json().catch(() => ({}))) as { conta_bancaria_id?: string; ate?: string | null; motivo?: string };
   // Reabrir continua só para administrador, e o perfil de acesso pode tirar.
   const recusa = (await recusaAdmin()) ?? (await recusaAcao('reabrir_periodo', { contaBancariaId: corpo.conta_bancaria_id || null }));

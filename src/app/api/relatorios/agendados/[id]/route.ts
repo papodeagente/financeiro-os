@@ -6,6 +6,7 @@ import {
   alterarAtivo, apagarAgendamento, historicoDeEnvios, lerAgendamento, listarLeituras, salvarAgendamento,
 } from '@/lib/relatorios-agendados/servidor';
 import { CABECALHOS, autorDaSessao, entrada, erroDaRota, recusaDoRelatorio } from '@/lib/relatorios-agendados/rota';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 /** Um envio agendado (E7, G3). Contrato em src/lib/relatorios-agendados/rota.ts. */
 export const dynamic = 'force-dynamic';
@@ -14,6 +15,8 @@ type Params = { params: Promise<{ id: string }> };
 const naoAchou = () => NextResponse.json({ error: 'Envio agendado não encontrado.', codigo: 'NAO_ACHOU' }, { status: 404, headers: CABECALHOS });
 
 export async function GET(_req: Request, { params }: Params) {
+  const semModulo = await recusaModulo('relatorios');
+  if (semModulo) return semModulo;
   const ctx = await entrada('ler');
   if (ctx instanceof NextResponse) return ctx;
   const { id } = await params;
@@ -28,6 +31,8 @@ export async function GET(_req: Request, { params }: Params) {
 }
 
 export async function PUT(req: Request, { params }: Params) {
+  const semModulo = await recusaModulo('relatorios');
+  if (semModulo) return semModulo;
   const ctx = await entrada('mudar');
   if (ctx instanceof NextResponse) return ctx;
   const { id } = await params;
@@ -47,6 +52,8 @@ export async function PUT(req: Request, { params }: Params) {
 }
 
 export async function PATCH(req: Request, { params }: Params) {
+  const semModulo = await recusaModulo('relatorios');
+  if (semModulo) return semModulo;
   const ctx = await entrada('mudar');
   if (ctx instanceof NextResponse) return ctx;
   const { id } = await params;
@@ -62,6 +69,8 @@ export async function PATCH(req: Request, { params }: Params) {
 }
 
 export async function DELETE(_req: Request, { params }: Params) {
+  const semModulo = await recusaModulo('relatorios');
+  if (semModulo) return semModulo;
   const ctx = await entrada('mudar');
   if (ctx instanceof NextResponse) return ctx;
   const { id } = await params;

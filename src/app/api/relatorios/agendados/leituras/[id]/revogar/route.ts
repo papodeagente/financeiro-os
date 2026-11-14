@@ -2,11 +2,14 @@ import { NextResponse } from 'next/server';
 import { registrarEventoAuditoria } from '@/lib/audit';
 import { revogarLeitura } from '@/lib/relatorios-agendados/servidor';
 import { CABECALHOS, entrada, erroDaRota } from '@/lib/relatorios-agendados/rota';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 /** Desliga um link de leitura de relatório (E7, G3). Quem abrir depois vê "este link não abre mais". */
 export const dynamic = 'force-dynamic';
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('relatorios');
+  if (semModulo) return semModulo;
   const ctx = await entrada('mudar');
   if (ctx instanceof NextResponse) return ctx;
   const { id } = await params;

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao, recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaAcao, recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { gravarConfigNotas, lerConfigNotas } from '@/lib/nota-regras-servidor';
 
@@ -10,6 +10,8 @@ import { gravarConfigNotas, lerConfigNotas } from '@/lib/nota-regras-servidor';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const semModulo = await recusaModulo('notas');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();
@@ -18,6 +20,8 @@ export async function GET() {
 }
 
 export async function PUT(req: Request) {
+  const semModulo = await recusaModulo('notas');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('configurar_notas');
   if (recusa) return recusa;
   await initDB();

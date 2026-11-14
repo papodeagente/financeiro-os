@@ -1,7 +1,8 @@
 import pool, { initDB } from '@/lib/db';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { hojeISO } from '@/lib/money';
-import { porteiroDoPortal, respostaDoPortal } from '@/lib/cobranca/portal-porteiro';
+import { porteiroDoPortal, respostaDoPortal, respostaLinkNaoAbre } from '@/lib/cobranca/portal-porteiro';
+import { recusaModuloDaAgencia } from '@/lib/guarda-rota';
 import { lerReciboDoPortal } from '@/lib/cobranca/portal-servidor';
 
 /**
@@ -19,6 +20,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     const exec = pool as unknown as ExecutorSQL;
     const p = await porteiroDoPortal(req, exec, token);
     if ('resposta' in p) return p.resposta;
+    const semModulo = await recusaModuloDaAgencia(p.link.tenant_id, 'cobranca', respostaLinkNaoAbre);
+    if (semModulo) return semModulo;
     const r = await lerReciboDoPortal(exec, p.link, conta, hojeISO());
     if (!r) return respostaDoPortal({ error: 'Recibo não encontrado.' }, 404);
     if (!r.ok) return respostaDoPortal({ error: r.motivo }, 422);

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
-import { recusaAcao } from '@/lib/guarda-rota';
+import { recusaAcao, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao } from '@/lib/caixa-atomico';
 import { cancelarSinal } from '@/lib/fornecedor-servidor';
 import { contexto, corpo, respostaDeErroDoFornecedor, texto } from '@/lib/fornecedor-rota';
@@ -9,6 +9,8 @@ import { contexto, corpo, respostaDeErroDoFornecedor, texto } from '@/lib/fornec
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('gerar_fatura_fornecedor');
   if (recusa) return recusa;
   await initDB();

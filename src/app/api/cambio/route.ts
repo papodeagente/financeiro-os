@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { lerPainelDeCambio } from '@/lib/cambio-servidor';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 // Câmbio e índices (05/11/2026, E6). Só leitura do cache global que a tarefa
 // de 15 min grava: esta rota NUNCA chama a AwesomeAPI nem o Banco Central.
@@ -11,6 +12,8 @@ import { lerPainelDeCambio } from '@/lib/cambio-servidor';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  const semModulo = await recusaModulo('cambio');
+  if (semModulo) return semModulo;
   const sessao = await getSession();
   if (!sessao) return NextResponse.json({ error: 'Sessao necessaria' }, { status: 401 });
   await initDB();

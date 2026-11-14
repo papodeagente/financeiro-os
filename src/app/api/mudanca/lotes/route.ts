@@ -6,10 +6,13 @@ import { emTransacao } from '@/lib/caixa-atomico';
 import { chaveDeIdempotencia, corpoJson, naRota } from '@/lib/migracao/rota';
 import { criarLote, listarLotes } from '@/lib/migracao/servidor';
 import { loteParaTela } from '@/lib/migracao/telas';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const semModulo = await recusaModulo('mudanca');
+  if (semModulo) return semModulo;
   return naRota(async ({ exec, tenantId }) => {
     const lotes = await listarLotes(exec, tenantId);
     const out = [];
@@ -19,6 +22,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('mudanca');
+  if (semModulo) return semModulo;
   return naRota(async ({ tenantId, quem }) => {
     const corpo = await corpoJson(req);
     const chave = chaveDeIdempotencia(req);

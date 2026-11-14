@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao, recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaAcao, recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { lerConfigDoCheque, salvarConfigDoCheque } from '@/lib/cheques-servidor';
 import { contasDoCheque, respostaDoErro } from '@/lib/cheques-rota';
@@ -24,6 +24,8 @@ async function contaVisivel(contaId: string): Promise<NextResponse | null> {
 }
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('cheques');
+  if (semModulo) return semModulo;
   const conta = (new URL(req.url).searchParams.get('conta') ?? '').trim();
   if (!conta) return NextResponse.json({ error: 'Escolha a conta bancária.' }, { status: 400 });
   const recusa = (await recusaFinanceira('ler')) ?? (await recusaAcao('ver_conta_bancaria', { contaBancariaId: conta }));
@@ -42,6 +44,8 @@ export async function GET(req: Request) {
 }
 
 export async function PUT(req: Request) {
+  const semModulo = await recusaModulo('cheques');
+  if (semModulo) return semModulo;
   const corpo = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   const conta = String(corpo?.conta_bancaria_id ?? '').trim();
   if (!conta) return NextResponse.json({ error: 'Escolha a conta bancária.' }, { status: 400 });

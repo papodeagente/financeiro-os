@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { permitirChamada } from '@/lib/limite-publico';
-import { CABECALHOS_DO_PORTAL, porteiroDoPortal, respostaDoPortal } from '@/lib/cobranca/portal-porteiro';
+import { CABECALHOS_DO_PORTAL, porteiroDoPortal, respostaDoPortal, respostaLinkNaoAbre } from '@/lib/cobranca/portal-porteiro';
+import { recusaModuloDaAgencia } from '@/lib/guarda-rota';
 import { notaDoPortal } from '@/lib/cobranca/portal-servidor';
 import { carregarConfigFiscal } from '@/lib/nfse-servico';
 import { emissorDaConfig, ErroFiscal } from '@/lib/nfse-emissor';
@@ -28,6 +29,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     const exec = pool as unknown as ExecutorSQL;
     const p = await porteiroDoPortal(req, exec, token);
     if ('resposta' in p) return p.resposta;
+    const semModulo = await recusaModuloDaAgencia(p.link.tenant_id, 'cobranca', respostaLinkNaoAbre);
+    if (semModulo) return semModulo;
     if (!permitirChamada(`portal-nota:${p.link.id}`, ARQUIVOS_POR_LINK_POR_HORA, 3600_000)) {
       return respostaDoPortal({ error: 'Muitos arquivos baixados em pouco tempo. Tente de novo mais tarde.' }, 429);
     }

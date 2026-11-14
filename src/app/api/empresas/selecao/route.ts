@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { escopoDaSessao, salvarSelecao, type ExecutorEmpresas } from '@/lib/empresas-servidor';
 import { respostaDeErroDaEmpresa } from '@/lib/empresas-rota';
 
@@ -11,6 +11,8 @@ import { respostaDeErroDaEmpresa } from '@/lib/empresas-rota';
 export const dynamic = 'force-dynamic';
 
 export async function PUT(req: Request) {
+  const semModulo = await recusaModulo('empresas');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();

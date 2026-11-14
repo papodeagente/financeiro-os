@@ -13,6 +13,7 @@ import {
   EXPORTACAO_MAX, FiltroInvalido, csvDosMovimentos, documentoDosMovimentos, lerFiltro, lerMovimentos, lerParaExportar,
   type LeiauteDeExportacao,
 } from '@/lib/movimentos-caixa';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 /**
  * Extrato de conta e Movimentações (05/11/2026): só leitura, paginado no
@@ -28,6 +29,8 @@ export const dynamic = 'force-dynamic';
 const HEADERS = { 'Cache-Control': 'private, no-store' };
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   try {
     const session = await getSession();
     const recusa = bloqueioFinanceiro(session, 'ler');

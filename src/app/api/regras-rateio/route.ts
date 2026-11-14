@@ -4,13 +4,15 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao } from '@/lib/caixa-atomico';
 import { ErroCadastro, listarRegras, salvarRegra } from '@/lib/centros-custo-servidor';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   try {
     if (!(await getSession())) return NextResponse.json({ error: 'Sessao necessaria' }, { status: 401 });
     await initDB();
@@ -22,6 +24,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   try {
     const recusa = await recusaFinanceira('escrever');
     if (recusa) return recusa;

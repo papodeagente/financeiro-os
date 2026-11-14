@@ -3,11 +3,14 @@ import { contextoDaComissao, respostaDeErroDaComissao, ISO_MES } from '@/lib/com
 import { painelDoVendedor } from '@/lib/comissao-funcoes-servidor';
 import { hojeISO } from '@/lib/money';
 import { registrarAcessoSensivel } from '@/lib/acesso-sensivel';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 // Painel do vendedor: o mês, a faixa, quanto falta e cada venda com "por que recebi isto?".
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('comissoes');
+  if (semModulo) return semModulo;
   const ctx = await contextoDaComissao();
   if (ctx instanceof NextResponse) return ctx;
   const u = new URL(req.url).searchParams;

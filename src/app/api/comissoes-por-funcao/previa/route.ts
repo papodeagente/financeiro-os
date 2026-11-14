@@ -2,12 +2,15 @@ import { NextResponse } from 'next/server';
 import { contextoDaComissao, quemFechaDo, respostaDeErroDaComissao, ISO_DATA } from '@/lib/comissao-rota';
 import { previaDoFechamento } from '@/lib/comissao-funcoes-servidor';
 import { hojeISO } from '@/lib/money';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 // Prévia do Fechar comissões até a data. Quem não vê a equipe vê só as suas;
 // as funções que outra pessoa fecha (Equipe › Funções) não aparecem.
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('comissoes');
+  if (semModulo) return semModulo;
   const ctx = await contextoDaComissao();
   if (ctx instanceof NextResponse) return ctx;
   if (!ctx.ver_todos && !ctx.ver_proprias) return NextResponse.json({ error: 'Seu acesso não inclui comissões.', codigo: 'SEM_DIREITO' }, { status: 403 });

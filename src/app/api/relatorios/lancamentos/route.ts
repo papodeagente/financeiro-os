@@ -7,7 +7,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { podeExportar } from '@/lib/permissoes';
 import { registrarEventoAuditoria } from '@/lib/audit';
 import { hojeISO } from '@/lib/money';
@@ -27,6 +27,8 @@ const NOME: Record<string, string> = {
 };
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('relatorios');
+  if (semModulo) return semModulo;
   try {
     const recusa = await recusaFinanceira('ler');
     if (recusa) return recusa;

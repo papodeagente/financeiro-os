@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { pdfDoCarne } from '@/lib/cobranca/servidor';
 import { respostaDeErroDaCobranca } from '@/lib/cobranca/rota';
 
@@ -10,6 +10,8 @@ import { respostaDeErroDaCobranca } from '@/lib/cobranca/rota';
 export const dynamic = 'force-dynamic';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('cobranca');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();

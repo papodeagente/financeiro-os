@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao } from '@/lib/guarda-rota';
+import { recusaAcao, recusaModulo } from '@/lib/guarda-rota';
 import { pode } from '@/lib/permissoes-servidor';
 import { registrarEventoAuditoria } from '@/lib/audit';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
@@ -25,6 +25,8 @@ export const dynamic = 'force-dynamic';
 const dataOuNull = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('extrato');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('conciliar');
   if (recusa) return recusa;
   await initDB();
@@ -43,6 +45,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('extrato');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('conciliar');
   if (recusa) return recusa;
   await initDB();

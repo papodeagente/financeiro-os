@@ -6,10 +6,13 @@ import { emTransacao } from '@/lib/caixa-atomico';
 import { corpoJson, naRota } from '@/lib/migracao/rota';
 import { atualizarLote, lerLote } from '@/lib/migracao/servidor';
 import { loteParaTela } from '@/lib/migracao/telas';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('mudanca');
+  if (semModulo) return semModulo;
   return naRota(async ({ exec, tenantId }) => {
     const { id } = await params;
     return NextResponse.json(await loteParaTela(exec, tenantId, await lerLote(exec, tenantId, id)));
@@ -17,6 +20,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('mudanca');
+  if (semModulo) return semModulo;
   return naRota(async ({ tenantId }) => {
     const { id } = await params;
     const corpo = await corpoJson(req);

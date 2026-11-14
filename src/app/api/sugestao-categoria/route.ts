@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { sugerirCategoriaPeloHistorico } from '@/lib/sugestao-categoria-servidor';
 import { tabelaDoEndereco } from '@/lib/titulo-rota';
@@ -12,6 +12,8 @@ import { tabelaDoEndereco } from '@/lib/titulo-rota';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();

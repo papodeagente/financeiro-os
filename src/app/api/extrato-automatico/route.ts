@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao, recusaAdmin } from '@/lib/guarda-rota';
+import { recusaAcao, recusaAdmin, recusaModulo } from '@/lib/guarda-rota';
 import { contasPermitidas, pode } from '@/lib/permissoes-servidor';
 import { podeGerenciarUsuarios } from '@/lib/permissoes';
 import { cofreDisponivel } from '@/lib/cofre';
@@ -34,6 +34,8 @@ export const dynamic = 'force-dynamic';
 const exec = () => pool as unknown as ExecutorSQL;
 
 export async function GET() {
+  const semModulo = await recusaModulo('extrato');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('ver_conta_bancaria');
   if (recusa) return recusa;
   await initDB();
@@ -60,6 +62,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('extrato');
+  if (semModulo) return semModulo;
   const admin = await recusaAdmin();
   if (admin) return admin;
   let body: Record<string, unknown>;

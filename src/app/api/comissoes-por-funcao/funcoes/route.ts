@@ -2,11 +2,14 @@ import { NextResponse } from 'next/server';
 import { contextoDaComissao, respostaDeErroDaComissao } from '@/lib/comissao-rota';
 import { excluirFuncao, salvarFuncao } from '@/lib/comissao-funcoes-servidor';
 import { emTransacao } from '@/lib/caixa-atomico';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 // Funções e quem está em cada uma (plano, início, sem comissão).
 export const dynamic = 'force-dynamic';
 
 export async function PUT(req: Request) {
+  const semModulo = await recusaModulo('comissoes');
+  if (semModulo) return semModulo;
   const ctx = await contextoDaComissao(['editar_financeiro', 'ver_comissoes_todos']);
   if (ctx instanceof NextResponse) return ctx;
   const corpo = (await req.json().catch(() => null)) as { funcao?: unknown; pessoas?: unknown[] } | null;
@@ -17,6 +20,8 @@ export async function PUT(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const semModulo = await recusaModulo('comissoes');
+  if (semModulo) return semModulo;
   const ctx = await contextoDaComissao(['editar_financeiro', 'ver_comissoes_todos']);
   if (ctx instanceof NextResponse) return ctx;
   const id = new URL(req.url).searchParams.get('id') ?? '';

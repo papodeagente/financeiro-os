@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
 import { getSession } from '@/lib/auth';
-import { recusaAcao, recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaAcao, recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { addDias, hojeISO } from '@/lib/money';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { emitirNotasDaRegra, gradeDeNotas } from '@/lib/nota-regras-servidor';
@@ -13,6 +13,8 @@ import { lerDataDaNota, lerFiltrosDaGrade, lerSelecao, respostaDeErroDaNota } fr
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('notas');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();
@@ -28,6 +30,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('notas');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('emitir_nota');
   if (recusa) return recusa;
   await initDB();

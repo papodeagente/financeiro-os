@@ -11,7 +11,7 @@ import path from 'path';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
 import { getSession } from '@/lib/auth';
-import { recusaFinanceira, respostaPeriodoFechado } from '@/lib/guarda-rota';
+import { recusaFinanceira, respostaPeriodoFechado, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao } from '@/lib/caixa-atomico';
 import { pastaComprovantes } from '@/lib/comprovantes';
 import { generateId } from '@/lib/utils';
@@ -32,6 +32,8 @@ function falha(e: unknown) {
 }
 
 export async function POST(req: Request, { params }: Params) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('escrever');
   if (recusa) return recusa;
   await initDB();
@@ -78,6 +80,8 @@ export async function POST(req: Request, { params }: Params) {
 }
 
 export async function DELETE(req: Request, { params }: Params) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('escrever');
   if (recusa) return recusa;
   await initDB();

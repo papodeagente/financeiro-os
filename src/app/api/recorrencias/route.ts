@@ -12,8 +12,11 @@ import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { conferirMoedaDoCadastro } from '@/lib/moedas';
 import { lerCatalogoDaAgencia } from '@/lib/moedas-servidor';
 import { recusaDosObrigatorios } from '@/lib/campos-personalizados-servidor';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   return rodarRota('escrever', async ({ tenantId, hoje, tx }) => {
     const corpo = await lerCorpo(req);
     const serie = prepararSerie(corpo);

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
 import { getSession } from '@/lib/auth';
-import { recusaAcao } from '@/lib/guarda-rota';
+import { recusaAcao, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao } from '@/lib/caixa-atomico';
 import { registrarNotaEmitidaFora } from '@/lib/nota-externa';
 import { respostaDeErroDaNota } from '@/lib/nota-regras-rota';
@@ -13,6 +13,8 @@ import { respostaDeErroDaNota } from '@/lib/nota-regras-rota';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('notas');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('emitir_nota');
   if (recusa) return recusa;
   await initDB();

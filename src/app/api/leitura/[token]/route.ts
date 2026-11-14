@@ -5,6 +5,7 @@ import { estaNoLimite, ipDaRequisicao, permitirChamada } from '@/lib/limite-publ
 import { acharLeitura } from '@/lib/relatorios-agendados/servidor';
 import { bytesDoDocumento, cabecalhosDoArquivo, formatoDaConsulta } from '@/lib/exportacao/arquivo';
 import { nomeDoArquivo } from '@/lib/exportacao/documento';
+import { recusaModuloDaAgencia } from '@/lib/guarda-rota';
 
 /**
  * Link de leitura de relatório (E7, G3), PÚBLICO: sem login, só aquele
@@ -33,6 +34,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     permitirChamada(`leitura-falha:${ip}`, 10, 60 * 60_000);
     return NextResponse.json({ error: NAO_ABRE }, { status: 404, headers: CABECALHOS });
   }
+  // Agência dona do link sem o módulo de relatórios (14/11/2026): igual a link que não existe.
+  const semModulo = await recusaModuloDaAgencia(leitura.tenant_id, 'relatorios',
+    () => NextResponse.json({ error: NAO_ABRE }, { status: 404, headers: CABECALHOS }));
+  if (semModulo) return semModulo;
   if (!permitirChamada(`leitura-link:${leitura.id}`, 300, 24 * 3600_000)) return NextResponse.json({ error: DEVAGAR }, { status: 429, headers: CABECALHOS });
   if (formato && formato !== 'csv') {
     const bytes = await bytesDoDocumento(leitura.documento, formato, { agencia: leitura.agencia });

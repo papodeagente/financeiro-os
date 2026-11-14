@@ -6,7 +6,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
 import { getSession } from '@/lib/auth';
-import { recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { pode } from '@/lib/permissoes-servidor';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { lerTitulo, origemDoTitulo } from '@/lib/titulo-origem-servidor';
@@ -15,6 +15,8 @@ import { naoAchado, tabelaDoEndereco, tituloEscondido } from '@/lib/titulo-rota'
 export const dynamic = 'force-dynamic';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ tabela: string; id: string }> }) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();

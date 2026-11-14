@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAdmin } from '@/lib/guarda-rota';
+import { recusaAdmin, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { gravarChaveDaAgencia } from '@/lib/encargos-servidor';
 import { ehSecaoPorEmpresa } from '@/lib/empresas';
@@ -30,6 +30,8 @@ const adaptadorDeNotas: AdaptadorDaSecao = {
 };
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('empresas');
+  if (semModulo) return semModulo;
   const recusa = await recusaAdmin();
   if (recusa) return recusa;
   await initDB();

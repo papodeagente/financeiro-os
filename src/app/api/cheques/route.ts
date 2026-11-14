@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao, recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaAcao, recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { hojeISO } from '@/lib/money';
 import { lerPedidoDeEmissao, SITUACOES_DO_CHEQUE, type SituacaoDoCheque } from '@/lib/cheques';
@@ -21,6 +21,8 @@ import { contasDoCheque, respostaDoErro } from '@/lib/cheques-rota';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('cheques');
+  if (semModulo) return semModulo;
   const recusa = (await recusaFinanceira('ler')) ?? (await recusaAcao('ver_conta_bancaria'));
   if (recusa) return recusa;
   await initDB();
@@ -46,6 +48,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('cheques');
+  if (semModulo) return semModulo;
   const recusa = (await recusaFinanceira('escrever')) ?? (await recusaAcao('liquidar_pagar'));
   if (recusa) return recusa;
   const corpo = await req.json().catch(() => null);

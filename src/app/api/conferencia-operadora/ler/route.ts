@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao } from '@/lib/guarda-rota';
+import { recusaAcao, recusaModulo } from '@/lib/guarda-rota';
 import { chaveAnthropic, type Consulta } from '@/lib/config-apis';
 import { registrarEventoAuditoria } from '@/lib/audit';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
@@ -28,6 +28,8 @@ import {
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('extrato');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('conciliar');
   if (recusa) return recusa;
   await initDB();

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAcao, recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaAcao, recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { criarCredito, extratoDoClienteNoBanco, listarCarteiras } from '@/lib/credito-cliente-servidor';
 import { centavosDe, lerJson, respostaDeErroDaParteD } from '@/lib/parte-d-rota';
@@ -11,6 +11,8 @@ import { centavosDe, lerJson, respostaDeErroDaParteD } from '@/lib/parte-d-rota'
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();
@@ -36,6 +38,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   const recusa = await recusaAcao('usar_credito_cliente');
   if (recusa) return recusa;
   await initDB();

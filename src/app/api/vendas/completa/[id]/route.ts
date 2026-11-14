@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
-import { recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { vendaAutorizada } from '@/lib/venda-autorizada';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { normalizarVenda } from '@/lib/venda-modelo';
@@ -14,6 +14,8 @@ import { cabecalhoDaEmpresa } from '@/lib/empresas-rota';
 export const dynamic = 'force-dynamic';
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   await initDB();
   const { id } = await ctx.params;
   const acesso = await vendaAutorizada(id);
@@ -28,6 +30,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 }
 
 export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   const recusa = await recusaFinanceira('escrever');
   if (recusa) return recusa;
   await initDB();

@@ -13,6 +13,7 @@ import {
   colunasDaExportacao, filtrarLinhas, linhaDaVenda, linhaParaTela, linhasParaExportar, opcoesDaLista,
   type FiltroDaLista,
 } from '@/lib/vendas-lista';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 /**
  * A lista de vendas (/vendas).
@@ -30,6 +31,8 @@ export const dynamic = 'force-dynamic';
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('venda');
+  if (semModulo) return semModulo;
   const sessao = await getSession();
   if (!sessao) return NextResponse.json({ error: 'Sessao necessaria' }, { status: 401 });
   await initDB();

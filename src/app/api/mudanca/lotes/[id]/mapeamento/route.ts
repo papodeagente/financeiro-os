@@ -8,10 +8,13 @@ import { emTransacao } from '@/lib/caixa-atomico';
 import { corpoJson, naRota } from '@/lib/migracao/rota';
 import { atualizarArquivo, ErroMudanca, listarArquivos } from '@/lib/migracao/servidor';
 import { mapeamentoDoPedido, mapeamentoParaTela } from '@/lib/migracao/telas';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('mudanca');
+  if (semModulo) return semModulo;
   return naRota(async ({ exec, tenantId }) => {
     const { id } = await params;
     return NextResponse.json({ arquivos: (await listarArquivos(exec, tenantId, id)).map(mapeamentoParaTela) });
@@ -19,6 +22,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const semModulo = await recusaModulo('mudanca');
+  if (semModulo) return semModulo;
   return naRota(async ({ tenantId }) => {
     const { id } = await params;
     const corpo = await corpoJson(req);

@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaFinanceira, recusaModulo } from '@/lib/guarda-rota';
 import { chaveAnthropic, type Consulta } from '@/lib/config-apis';
 import { detectarTipo } from '@/lib/arquivos';
 import { pastaComprovantes } from '@/lib/comprovantes';
@@ -38,6 +38,8 @@ const EXTENSAO: Record<MimeLegivel, string> = {
 };
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('nucleo');
+  if (semModulo) return semModulo;
   try {
     const recusa = await recusaFinanceira('escrever');
     if (recusa) return recusa;

@@ -11,6 +11,7 @@ import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { executarFerramenta, temAlgumDireito, type ContextoDaPergunta, type DireitosDaPergunta } from '@/lib/perguntar/ferramentas';
 import { MODELO_DA_PERGUNTA, responderPergunta } from '@/lib/perguntar/orquestrar';
 import { concluirPergunta, reservarPergunta, usoDoDia } from '@/lib/perguntar/uso';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 /**
  * Perguntar em texto (E7, fechamento).
@@ -44,6 +45,8 @@ async function direitosDa(sessao: SessionPayload, exec: ExecutorSQL): Promise<Di
 }
 
 export async function GET() {
+  const semModulo = await recusaModulo('ia');
+  if (semModulo) return semModulo;
   const sessao = await getSession();
   if (!sessao) return NextResponse.json({ error: 'Sessao necessaria' }, { status: 401, headers: HEADERS });
   await initDB();
@@ -61,6 +64,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('ia');
+  if (semModulo) return semModulo;
   const sessao = await getSession();
   if (!sessao) return NextResponse.json({ error: 'Sessao necessaria' }, { status: 401, headers: HEADERS });
   await initDB();

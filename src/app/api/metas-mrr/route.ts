@@ -1,5 +1,6 @@
 import { apagarMetaMrr, copiarMetasDoMes, gravarMetaMrr, listarMetasMrr } from '@/lib/comissao-mrr-servidor';
 import { contextoDoEcossistema, respostaJson as json } from '@/lib/rota-do-ecossistema';
+import { recusaModulo } from '@/lib/guarda-rota';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,6 +8,8 @@ const MES = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 /** Metas de MRR do mês (só na conta do ecossistema). */
 export async function GET(req: Request) {
+  const semModulo = await recusaModulo('comissoes');
+  if (semModulo) return semModulo;
   try {
     const ctx = await contextoDoEcossistema('ler');
     if ('response' in ctx) return ctx.response;
@@ -21,6 +24,8 @@ export async function GET(req: Request) {
 
 /** { acao: 'gravar', meta } ou { acao: 'copiar', de, para }. */
 export async function POST(req: Request) {
+  const semModulo = await recusaModulo('comissoes');
+  if (semModulo) return semModulo;
   try {
     const ctx = await contextoDoEcossistema('escrever');
     if ('response' in ctx) return ctx.response;
@@ -42,6 +47,8 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const semModulo = await recusaModulo('comissoes');
+  if (semModulo) return semModulo;
   try {
     const ctx = await contextoDoEcossistema('escrever');
     if ('response' in ctx) return ctx.response;
