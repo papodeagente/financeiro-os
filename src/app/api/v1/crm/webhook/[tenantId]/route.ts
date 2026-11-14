@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { TIPO_ASAAS_OPERACAO } from '@/lib/asaas-unificado/regras';
 import { responderOperacaoDoCrm } from '@/lib/asaas-unificado/rota';
-import { processarEventoCRM, verificarAssinaturaCRM } from '@/lib/crm-integration';
+import { processarEventoCRM, verificarAssinaturaCRM, versoesDaVendaDaConta } from '@/lib/crm-integration';
+import { temModulo } from '@/lib/modulos-servidor';
 
 export async function POST(
   req: NextRequest,
@@ -32,7 +33,8 @@ export async function POST(
 
     // Conexão Asaas unificada (E7): o CRM pede uma operação no Asaas da
     // agência e espera a resposta na hora (não é evento, não entra na fila).
-    if (tipo === TIPO_ASAAS_OPERACAO) {
+    // Só na agência com o módulo; sem ele, segue como evento comum (versão simples).
+    if (tipo === TIPO_ASAAS_OPERACAO && await temModulo(tenantId, 'asaas_unificado')) {
       return responderOperacaoDoCrm(tenantId, payload, req.headers.get('x-crm-timestamp'));
     }
 
@@ -59,9 +61,10 @@ export async function POST(
       processado: resultado.processado,
       evento_id: id,
       acao: resultado.acao,
-      // Versões da VENDA_FECHADA que este Financeiro entende (E5): o CRM
-      // passa a mandar a v2 quando vê o 2 aqui (ou pela chave da empresa).
-      versoes_venda: [1, 2],
+      // Versões da VENDA_FECHADA que esta agência entende (E5): o CRM passa
+      // a mandar a v2 quando vê o 2 aqui (ou pela chave da empresa). O 2 só
+      // com o módulo "Venda completa" (14/11/2026); sem ele, [1].
+      versoes_venda: await versoesDaVendaDaConta(tenantId),
       ...(resultado.processado ? {} : { erro: resultado.erro ?? resultado.acao }),
     }, { status: resultado.processado ? 200 : 500 });
   } catch (e) {

@@ -37,6 +37,7 @@ import type {
 } from './nfse-tipos';
 import { empresaDoRegistro } from './empresas';
 import { empresaComConfigPropria } from './empresas-config';
+import { recusaDaDemo } from './demo/saidas';
 
 export const CONFIG_FISCAL_ID = 'config-fiscal-singleton';
 
@@ -702,6 +703,9 @@ export async function emitirNota(
    * A alíquota do ISS é a única que fica: ela já é tratada como estimativa em
    * todo o sistema, e `issEhEstimativa` é o que diz isso na tela.
    */
+  // Agência de demonstração: nenhuma nota vai à prefeitura (demo/saidas.ts).
+  const recusaDemo = pool ? await recusaDaDemo(pool, tenantId) : null;
+  if (recusaDemo) throw new ErroFiscal(`Nota não emitida: ${recusaDemo}. Registre como emitida fora do sistema.`);
   const ctxDaEmpresa = await carregarContexto(tenantId, contaReceberId);
   const empresaDaNota = empresaDoRegistro((ctxDaEmpresa?.conta ?? {}) as Record<string, unknown>);
   const configParaLimite = await carregarConfigFiscal(tenantId, empresaDaNota);
@@ -919,6 +923,8 @@ export async function cancelarNota(
   const nota = (rows[0]?.data ?? null) as NotaFiscal | null;
   if (!nota) throw new ErroFiscal('Nota não encontrada.');
   if (nota.status === 'CANCELADA') return nota;
+  const recusaDemo = await recusaDaDemo(pool, tenantId);
+  if (recusaDemo) throw new ErroFiscal(`Nota não cancelada no emissor: ${recusaDemo}.`);
   if (!motivo.trim()) throw new ErroFiscal('Informe o motivo do cancelamento.');
 
   // O emissor da empresa da nota (E7).

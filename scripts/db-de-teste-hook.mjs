@@ -35,6 +35,9 @@ export async function resolve(specifier, context, next) {
 }
 
 export async function load(url, context, next) {
+  // Folha de estilo importada por um componente (ex.: src/styles/ds.css):
+  // fora do bundler não há CSS; vira um módulo vazio.
+  if (/\.css$/.test(url)) return { format: 'module', source: 'export default {};', shortCircuit: true };
   if (url.startsWith(SRC) && /\.tsx?$/.test(url)) {
     const fonte = await readFile(fileURLToPath(url), 'utf8');
     const { outputText } = ts.transpileModule(fonte, {

@@ -34,12 +34,13 @@ import {
   AlarmClock, Landmark, ReceiptText, FileExclamationPoint,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useModulos } from '@/components/useModulos';
 import {
   PREFERENCIAS_NOTIFICACOES_PADRAO,
   TIPOS_NOTIFICACAO,
+  tiposDaVersao,
   type PreferenciasNotificacoes,
 } from '@/lib/notificacoes-config';
-import { useModulos } from '@/components/useModulos';
 import { avisoLiberado } from '@/lib/modulos';
 
 interface Notificacao {
@@ -347,10 +348,6 @@ function preferenceSignature(preferences: PreferenciasNotificacoes): string {
 export function NotificacoesBell() {
   const router = useRouter();
   const { user } = useAuth();
-  // Tipos de aviso que só existem com um módulo da versão completa (modulos.ts,
-  // MODULO_DO_AVISO) somem do filtro e das preferências da agência sem ele.
-  const { ligados } = useModulos();
-  const tiposDaConta = useMemo(() => CONFIGURED_TYPES.filter(tipo => avisoLiberado({ ligados }, tipo)), [ligados]);
   const panelId = useId();
   const titleId = `${panelId}-title`;
   const activitiesTabId = `${panelId}-activities-tab`;
@@ -408,6 +405,13 @@ export function NotificacoesBell() {
   itemsRef.current = items;
   loadedPageRef.current = loadedPage;
 
+  // Versão simples: as preferências mostram só os tipos de sempre (notificacoes-config.ts).
+  // Na completa, o tipo de um módulo só aparece com ele ligado (modulos.ts, MODULO_DO_AVISO).
+  const { telasCompletas, ligados } = useModulos();
+  const tiposDaConta = useMemo(
+    () => tiposDaVersao(telasCompletas).filter(tipo => avisoLiberado({ ligados }, tipo)),
+    [telasCompletas, ligados],
+  );
   const availableTypes = useMemo(
     () => Array.from(new Set([...tiposDaConta, ...items.map(item => item.tipo)])),
     [items, tiposDaConta],

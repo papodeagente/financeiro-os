@@ -187,7 +187,8 @@
         "origem_venda_id": "v-1",
         "origem_item_id": "i-1",
         "auto_gerado": true,
-        "fornecedor_pendente": false
+        "fornecedor_pendente": false,
+        "chave_natural": "f-hotel|seq1|parcela:1"
       },
       {
         "id": "#6",
@@ -226,7 +227,8 @@
         "origem_venda_id": "v-1",
         "origem_item_id": "i-2",
         "auto_gerado": true,
-        "fornecedor_pendente": false
+        "fornecedor_pendente": false,
+        "chave_natural": "f-cia|seq2|parcela:1"
       }
     ],
     "resumo": {
@@ -507,7 +509,8 @@
         "origem_venda_id": "v-1",
         "origem_item_id": "i-1",
         "auto_gerado": true,
-        "fornecedor_pendente": false
+        "fornecedor_pendente": false,
+        "chave_natural": "f-hotel|seq1|parcela:1"
       },
       {
         "id": "#8",
@@ -546,7 +549,8 @@
         "origem_venda_id": "v-1",
         "origem_item_id": "i-4",
         "auto_gerado": true,
-        "fornecedor_pendente": false
+        "fornecedor_pendente": false,
+        "chave_natural": "f-hotel|seq2|parcela:1"
       },
       {
         "id": "#9",
@@ -585,7 +589,8 @@
         "origem_venda_id": "v-1",
         "origem_item_id": "i-2",
         "auto_gerado": true,
-        "fornecedor_pendente": false
+        "fornecedor_pendente": false,
+        "chave_natural": "f-cia|seq3|parcela:1"
       }
     ],
     "resumo": {
@@ -764,7 +769,8 @@
         "origem_venda_id": "v-1",
         "origem_item_id": "i-6",
         "auto_gerado": true,
-        "fornecedor_pendente": true
+        "fornecedor_pendente": true,
+        "chave_natural": "-|seq1|parcela:1"
       }
     ],
     "resumo": {

@@ -368,7 +368,10 @@ console.log('--- FIN-06: saída para a internet ---');
     eq(S.ipInterno(ip), true, `interno: ${ip}`);
   }
   eq(S.ipInterno('8.8.8.8'), false, 'público passa');
-  eq(await erro(S.baixarImagemSegura('http://exemplo.com/a.jpg')), 'DestinoRecusado', 'http puro recusado');
+  // Imagem por http é aceita no ENDEREÇO (o Financeiro baixa imagens de sites
+  // sem https); quem barra destino interno é o socket, provado abaixo. Sem
+  // pedido de verdade à internet: o teste não pode depender de um domínio alheio.
+  eq(S.enderecoDeImagem('http://exemplo.com.br/a.jpg').protocol, 'http:', 'http aceito no endereço; o socket confere o destino');
   eq(await erro(S.baixarImagemSegura('https://user:pw@exemplo.com/a.jpg')), 'DestinoRecusado', 'credencial na URL recusada');
   eq(await erro(S.baixarImagemSegura('https://127.0.0.1/a.jpg')), 'DestinoRecusado', 'IP literal recusado');
   const dnsInterno = (_n, _o, pronto) => pronto(Object.assign(new Error('interno'), { code: 'EDESTINOINTERNO' }), '', 4);

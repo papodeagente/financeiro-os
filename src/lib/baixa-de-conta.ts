@@ -47,6 +47,15 @@ export interface EdicaoDeConta {
   id: string;
   tenantId: string;
   item: Record<string, unknown>;
+  /**
+   * Versão da agência (14/11/2026, modulos.ts). 'simples' = as regras da tela
+   * de sempre: sem aviso de edição simultânea, sem trava da conta nascida de
+   * venda e sem conferir a emissão. O caixa vai pelo mesmo caminho (linha
+   * travada, razão) e a recusa de salvar por cima de uma baixa feita por outra
+   * pessoa (segurança) valem nas duas.
+   * Ausente = 'completa'.
+   */
+  versao?: 'simples' | 'completa';
 }
 
 /** Variante que recebe o executor (para testes e para quem já está numa transação). */
@@ -57,24 +66,25 @@ export async function editarContaNoExecutor(exec: ExecutorSQL, p: EdicaoDeConta)
   );
   if (rows.length === 0) throw new ErroEdicaoConta('Conta não encontrada.', 404);
   const prev = (rows[0].data ?? {}) as Record<string, unknown>;
+  const simples = p.versao === 'simples';
   // Edição simultânea (06/11/2026): a tela manda a versão que leu; se outra
   // pessoa gravou depois, nada é gravado (409) e a tela oferece recarregar.
-  if (versaoMudou(versaoLida(p.item), rows[0].v)) {
+  if (!simples && versaoMudou(versaoLida(p.item), rows[0].v)) {
     throw new ErroEdicaoConta(MENSAGEM_CONFLITO_TITULO, 409, { conflito: true });
   }
   const { _status_lido: statusLido, ...semMarca } = semMarcasDeControle(p.item);
   // Conta nascida de venda (06/11/2026): pessoa, valor e vencimento só mudam
-  // pela venda. Ausentes no pedido, ficam como estão.
-  const trava = conferirTravaDaVenda(p.tabela, prev, semMarca);
+  // pela venda. Ausentes no pedido, ficam como estão. Versão completa.
+  const trava = simples ? { item: semMarca, mudou: [] as readonly string[] } : conferirTravaDaVenda(p.tabela, prev, semMarca);
   if (trava.mudou.length > 0) {
     throw new ErroEdicaoConta(mensagemDaTrava(trava.mudou), 409, { venda_id: vendaDeOrigem(prev) });
   }
   const item: Record<string, unknown> = { ...trava.item, id: p.id };
   // Emissão editável (06/11/2026): não fica depois do vencimento nem da
   // liquidação. Só confere quando uma das datas muda: conta antiga com datas
-  // fora de ordem continua editável no resto.
+  // fora de ordem continua editável no resto. Versão completa.
   const datas = ['data_emissao', 'data_vencimento'];
-  if (datas.some(c => String(item[c] ?? '') !== String(prev[c] ?? ''))) {
+  if (!simples && datas.some(c => String(item[c] ?? '') !== String(prev[c] ?? ''))) {
     const recusa = conferirEmissaoDaConta(p.tabela, item);
     if (recusa) throw new ErroEdicaoConta(recusa, 400);
   }
@@ -83,6 +93,9 @@ export async function editarContaNoExecutor(exec: ExecutorSQL, p: EdicaoDeConta)
   // abriu, e o salvamento chega com o status antigo (não baixado). Desfazer a
   // baixa só vale como ação explícita: a tela manda o status que ela LEU
   // (`_status_lido`), e ele precisa ser o status baixado que está no banco.
+  // Correção de segurança (auditoria 04/11, entrega B, R9): vale nas duas
+  // versões. A tela da versão simples não desfaz baixa; o que ela salva por
+  // cima de uma baixa feita por outra pessoa é recusado, como na completa.
   const prevStatus = String(prev.status ?? '');
   const novoStatus = String(item.status ?? '');
   if (statusMovimentaCaixa(prevStatus) && !statusMovimentaCaixa(novoStatus) && statusLido !== prevStatus) {

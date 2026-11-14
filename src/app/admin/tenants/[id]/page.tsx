@@ -9,6 +9,7 @@ import { useEhSuperAdmin } from '@/components/admin/PapelDaPlataforma'
 import { PLANOS_DO_SAAS } from '@/lib/planos-do-saas'
 import type { ModuloId } from '@/lib/modulos'
 import { VersaoEModulos } from './VersaoEModulos'
+import { SeloDemonstracao } from '@/components/admin/SeloDemonstracao'
 
 interface TenantDetail {
   id: string
@@ -29,6 +30,8 @@ interface TenantDetail {
   fin_versao?: string
   modulos?: Partial<Record<ModuloId, boolean>>
   modulos_liberados?: ModuloId[]
+  /** Agência de demonstração (Super Admin › Demonstração). */
+  demo?: boolean
 }
 
 export default function AdminTenantDetailPage() {
@@ -175,6 +178,7 @@ export default function AdminTenantDetailPage() {
             <span className="text-sm text-[var(--fin-text-3)] font-mono">{tenant.slug}</span>
             <StatusBadge status={tenant.status} />
             <PlanBadge plano={tenant.plano} />
+            {tenant.demo === true ? <SeloDemonstracao /> : null}
           </div>
           {tenant.cnpj && (
             <p className="text-sm text-[var(--fin-text-3)] mt-1">CNPJ: {tenant.cnpj}</p>

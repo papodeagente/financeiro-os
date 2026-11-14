@@ -99,6 +99,8 @@ const rotaConfig = await import('../src/app/api/config/vendas/route.ts');
 const rotaAntiga = await import('../src/app/api/vendas-crm/route.ts');
 
 const T = 'agencia-e5';
+// Versão por agência (14/11/2026): o que este teste prova é da versão COMPLETA (modulos.ts).
+await query(`INSERT INTO tenants (id, numero, data) VALUES ($1, 1, '{"fin_versao":"completa"}') ON CONFLICT (id) DO UPDATE SET data = tenants.data || EXCLUDED.data`, [T]);
 const todos = async (sql, args = []) => (await query(sql, args)).rows;
 const um = async (sql, args = []) => (await query(sql, args)).rows[0];
 const sessao = (perfil, userId = `u-${perfil}`) => ({ userId, nome: `Pessoa ${perfil}`, email: 'p@x.com', perfil, permissoes: {}, tenantId: T, tenantSlug: T });

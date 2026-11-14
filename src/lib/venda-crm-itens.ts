@@ -308,13 +308,22 @@ export interface ComoNasce {
   comissao_percentual: number;
 }
 
+/**
+ * A regra de 13/11/2026 numa pergunta só: o cliente paga ESTE fornecedor
+ * direto? Sim quando o cadastro do fornecedor diz (`recebe_direto_do_cliente`)
+ * ou o item foi cotado como "cobrado pelo fornecedor" na Cotação do CRM
+ * (escolha explícita, por item), e o dinheiro não passou por uma plataforma
+ * da agência. Vale para a venda do CRM v1 (comoALinhaNasce) e v2
+ * (quemCobraNaVendaDoCrm, venda completa).
+ */
+export function ehPagoDireto(l: { fornecedor_id?: string | null; cobrado_pelo_fornecedor?: boolean }, modo: ModoDaVenda): boolean {
+  const direto = !!l.fornecedor_id && (modo.recebeDiretoDoCliente.has(l.fornecedor_id) || l.cobrado_pelo_fornecedor === true);
+  return direto && !modo.pagoAAgencia;
+}
+
 export function comoALinhaNasce(l: Pick<LinhaCusto, 'fornecedor_id' | 'valor_custo' | 'valor_venda' | 'sem_fornecedor' | 'cobrado_pelo_fornecedor'>, modo: ModoDaVenda): ComoNasce {
   const proprio: ComoNasce = { meio_pagamento: 'proprio', comissao_valor: 0, comissao_percentual: 0 };
-  // Pago direto: o cadastro do fornecedor diz, ou o item foi cotado como
-  // "cobrado pelo fornecedor" na Cotação do CRM (escolha explícita, por item).
-  const direto = !!l.fornecedor_id && (modo.recebeDiretoDoCliente.has(l.fornecedor_id) || l.cobrado_pelo_fornecedor === true);
-  if (!direto) return proprio;
-  if (modo.pagoAAgencia) return proprio;
+  if (!ehPagoDireto(l, modo)) return proprio;
   const venda = round2(num(l.valor_venda));
   const custo = round2(num(l.valor_custo));
   const margem = round2(venda - custo);
@@ -322,4 +331,22 @@ export function comoALinhaNasce(l: Pick<LinhaCusto, 'fornecedor_id' | 'valor_cus
     return { meio_pagamento: 'fornecedor', comissao_valor: 0, comissao_percentual: 0 };
   }
   return { meio_pagamento: 'fornecedor', comissao_valor: margem, comissao_percentual: round2((margem / venda) * 100) };
+}
+
+/**
+ * Venda do CRM v2 (venda completa) pela mesma regra: quem cobra cada produto.
+ * `cobradoPeloFornecedor[i]` é a escolha explícita do item no CRM
+ * (`quem_cobra: 'FORNECEDOR'` ou `cobrado_pelo_fornecedor: true`); o resto
+ * vem do cadastro do fornecedor e da plataforma. Sem a escolha nem o
+ * cadastro, a agência cobra o cliente e paga o fornecedor.
+ */
+export function quemCobraNaVendaDoCrm(
+  produtos: ReadonlyArray<{ fornecedor: { id?: string } | null }>,
+  cobradoPeloFornecedor: ReadonlyArray<boolean>,
+  modo: ModoDaVenda,
+): Array<'AGENCIA' | 'FORNECEDOR'> {
+  return produtos.map((p, i) => (
+    ehPagoDireto({ fornecedor_id: p.fornecedor?.id ?? '', cobrado_pelo_fornecedor: cobradoPeloFornecedor[i] === true }, modo)
+      ? 'FORNECEDOR' : 'AGENCIA'
+  ));
 }

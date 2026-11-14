@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, Loader2, ExternalLink } from 'lucide-react'
 import { useEhSuperAdmin } from '@/components/admin/PapelDaPlataforma'
+import { SeloDemonstracao } from '@/components/admin/SeloDemonstracao'
+import { PLANOS_DO_SAAS } from '@/lib/planos-do-saas'
 
 interface Tenant {
   id: string
@@ -12,8 +14,11 @@ interface Tenant {
   slug: string
   plano: string
   status: string
-  user_count: number
+  /** A rota devolve userCount (o antigo user_count nunca chegava: a coluna ficava vazia). */
+  userCount: number
   created_at: string
+  /** Agência de demonstração (data.demo = true), criada pelo Super Admin › Demonstração. */
+  demo?: boolean
 }
 
 export default function AdminTenantsPage() {
@@ -89,7 +94,12 @@ export default function AdminTenantsPage() {
               {tenants.length > 0 ? (
                 tenants.map(tenant => (
                   <tr key={tenant.id} className="border-b border-[var(--fin-border)] last:border-0 hover:bg-[var(--fin-text)]/50 transition-colors">
-                    <td className="px-5 py-3 text-sm text-[var(--fin-text)] font-medium">{tenant.nome}</td>
+                    <td className="px-5 py-3 text-sm text-[var(--fin-text)] font-medium">
+                      <span className="inline-flex flex-wrap items-center gap-2">
+                        {tenant.nome}
+                        {tenant.demo === true ? <SeloDemonstracao /> : null}
+                      </span>
+                    </td>
                     <td className="px-5 py-3 text-sm text-[var(--fin-text-3)] font-mono">{tenant.slug}</td>
                     <td className="px-5 py-3">
                       <PlanBadge plano={tenant.plano} />
@@ -97,7 +107,7 @@ export default function AdminTenantsPage() {
                     <td className="px-5 py-3">
                       <StatusBadge status={tenant.status} />
                     </td>
-                    <td className="px-5 py-3 text-sm text-[var(--fin-text-3)]">{tenant.user_count}</td>
+                    <td className="px-5 py-3 text-sm text-[var(--fin-text-3)]">{tenant.userCount}</td>
                     <td className="px-5 py-3 text-sm text-[var(--fin-text-3)]">
                       {new Date(tenant.created_at).toLocaleDateString('pt-BR')}
                     </td>
@@ -142,14 +152,15 @@ function StatusBadge({ status }: { status: string }) {
 
 function PlanBadge({ plano }: { plano: string }) {
   const styles: Record<string, string> = {
-    free: 'bg-[var(--fin-text)]/50 text-[var(--fin-text-3)]',
-    pro: 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]',
-    enterprise: 'bg-[var(--fin-accent)]/15 text-[var(--fin-accent)]',
+    basic: 'bg-[var(--fin-surface-2)] text-[var(--fin-text-2)]',
+    founder: 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]',
+    'founder-pro': 'bg-[var(--fin-violet-soft)] text-[var(--fin-violet)]',
   }
+  const nome = PLANOS_DO_SAAS.find(p => p.slug === plano)?.nome ?? plano
 
   return (
     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${styles[plano] || 'bg-[var(--fin-surface)] text-[var(--fin-text-3)]'}`}>
-      {plano}
+      {nome}
     </span>
   )
 }

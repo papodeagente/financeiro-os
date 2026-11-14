@@ -5,6 +5,7 @@ import { COOKIE_NAVEGADOR, opcoesDoCookieDoNavegador, seloDepoisDoCodigo } from 
 import { registrarEventoAuditoria } from '@/lib/audit';
 import { etapaSegundoFator, exigeSegundoFator, segredoGravado, type Consulta } from '@/lib/segundo-fator';
 import { regraDoPagador } from '@/lib/segundo-fator-pagador';
+import { exigeSegundoFatorDoPagador } from '@/lib/segundo-fator-pagador-servidor';
 import { pode } from '@/lib/permissoes-servidor';
 import { bloqueioDeLogin, ipDoLogin, registrarFalhaDeLogin, registrarSucessoDeLogin } from '@/lib/limite-login';
 
@@ -46,7 +47,8 @@ export async function GET() {
   return NextResponse.json({
     ativo: administrador || (cadastro ? segredoGravado(cadastro) !== null : false),
     administrador,
-    exigido_para_pagar: !administrador && regra.ligado && (await pagaNoFinanceiro(sessao)),
+    // Versão por agência (14/11/2026): só a versão completa pede o código de quem paga.
+    exigido_para_pagar: !administrador && regra.ligado && (await exigeSegundoFatorDoPagador(sessao.tenantId)) && (await pagaNoFinanceiro(sessao)),
     verificada_nesta_sessao: administrador || sessao.sf === true,
     prazo: regra.prazo,
   }, { headers: { 'Cache-Control': 'no-store' } });

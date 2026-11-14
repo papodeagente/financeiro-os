@@ -23,6 +23,7 @@
 import { formatarDocumento } from './cliente-documento';
 import { comMaiuscula, valorPorExtenso } from './cobranca/extenso';
 import { emitenteDoRecibo, rotuloDaForma, type AgenciaDoRecibo, type BaixaDoRecibo, type Recibo } from './cobranca/recibo';
+import { marcaDoDocumento, type MarcaDoDocumento } from './marca-da-agencia';
 import { FORMAS, ROTULO_TIPO_PRODUTO, type FormaDaVenda, type ParteDaVenda, type Venda } from './venda-modelo';
 
 // ============================================================
@@ -192,9 +193,20 @@ export interface ServicoDoRecibo {
   passageiros: string[];
 }
 
+/**
+ * Identidade da agência no documento (14/11/2026): as cores do cadastro
+ * (Configurações › Dados da agência), como no recibo da versão simples
+ * (marca-da-agencia.ts). Sem cor cadastrada, o padrão.
+ */
+export function marcaDoRecibo(agencia: AgenciaDoRecibo | null): MarcaDoDocumento {
+  return marcaDoDocumento(agencia as { cores?: { primaria?: string; destaque?: string } } | null);
+}
+
 export interface ReciboDaVenda {
   numero: string;
   emitente: Recibo['emitente'];
+  /** Cores da agência (o logo já vem em `emitente.logo`). */
+  marca: MarcaDoDocumento;
   pagador: { nome: string; documento: string };
   venda: { numero: string; data: string };
   declaracao: string;
@@ -386,6 +398,7 @@ export function montarReciboDaVenda(e: EntradaDoReciboDaVenda, pagantePedido?: s
     recibo: {
       numero: numeroDoReciboDaVenda(e.venda, indice, grupos.length),
       emitente,
+      marca: marcaDoRecibo(e.agencia),
       pagador: { nome: g.nome, documento },
       venda: { numero: e.venda.numero, data: e.venda.data_venda },
       declaracao,
@@ -434,6 +447,8 @@ export interface EntradaDoReciboDaFatura {
 export interface ReciboDaFatura {
   numero: string;
   emitente: Recibo['emitente'];
+  /** Cores da agência (o logo já vem em `emitente.logo`). */
+  marca: MarcaDoDocumento;
   pagador: { nome: string; documento: string };
   referente: string;
   recebimentos: Array<LinhaRecebida & { conta: string; juros: number; multa: number; desconto: number }>;
@@ -470,6 +485,7 @@ export function montarReciboDaFatura(e: EntradaDoReciboDaFatura): ResultadoDoRec
     recibo: {
       numero: `RF-${String(f.numero).padStart(4, '0')}`,
       emitente: emitenteDoRecibo(e.agencia),
+      marca: marcaDoRecibo(e.agencia),
       pagador: { nome: f.pessoa_nome.trim() || 'Cliente', documento: e.documento ? formatarDocumento(e.documento) : '' },
       referente: partes.join(', '),
       recebimentos: valendo.map(b => ({

@@ -119,7 +119,8 @@ const RAP = await import('../src/app/api/aprovacoes/route.ts');
 const { responderExportacao } = await import('../src/lib/exportacao/servidor.ts');
 
 const T = 'ag-1';
-await query(`INSERT INTO tenants (id, status) VALUES ($1, 'ativo')`, [T]);
+// Versão por agência (14/11/2026): o que este teste prova é da versão COMPLETA (modulos.ts).
+await query(`INSERT INTO tenants (id, status, data) VALUES ($1, 'ativo', '{"fin_versao":"completa"}')`, [T]);
 const sessao = (perfil, userId = `u-${perfil}`, extra = {}) => ({ userId, nome: `Pessoa ${userId}`, email: `${userId}@x.com`, perfil, permissoes: {}, tenantId: T, tenantSlug: T, ...extra });
 const admin = sessao('ADMIN');
 const como = s => { globalThis.__SESSAO_DE_TESTE__ = s; P.invalidarPermissoes(T); };

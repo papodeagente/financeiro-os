@@ -38,6 +38,7 @@ import { CONFERENCIA_OPERADORA_SCHEMA_SQL } from './conferencia-operadora-schema
 import { RELATORIOS_AGENDADOS_SCHEMA_SQL } from './relatorios-agendados/schema';
 import { PERGUNTAS_IA_SCHEMA_SQL } from './perguntar/uso';
 import { CHEQUES_SCHEMA_SQL } from './cheques-servidor';
+import { aplicarAcertosDaVolta, type BancoDosAcertos } from './volta-acertos';
 
 const pool = process.env.DATABASE_URL
   ? new AuditPool({ connectionString: process.env.DATABASE_URL, max: 5 }, getAuditContext)
@@ -1612,6 +1613,15 @@ async function executarInitDB() {
   // cheque e as liquidações pagas com ele. Auditadas.
   await pool.query(CHEQUES_SCHEMA_SQL);
   await pool.query(RAZAO_SCHEMA_SQL);
+  // Acertos da volta da versão completa (14/11/2026): gatilho de auditoria
+  // que a versão simples pôs nas tabelas de controle, link antigo das
+  // propostas criadas sem token e a reabertura do razão de todas as agências
+  // (a diferença de 12/11 até a publicação vai para a revisão, nunca para o
+  // saldo). Cada um com marco próprio; nunca derruba o boot.
+  {
+    const resumo = await aplicarAcertosDaVolta(pool as unknown as BancoDosAcertos);
+    if (resumo.erros.length) console.error('[volta-acertos]', resumo.erros.join(' | '));
+  }
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);
   initialized = true;

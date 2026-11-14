@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, Building2, LogOut, Shield, Sparkles, Image as ImageIcon, Link as LinkIcon, MessageSquare, KeyRound, Users, UserCog, Blocks } from 'lucide-react'
+import { LayoutDashboard, Building2, LogOut, Shield, Sparkles, Image as ImageIcon, Link as LinkIcon, MessageSquare, KeyRound, Users, UserCog, Blocks, HeartPulse, FlaskConical } from 'lucide-react'
 import { TELAS_DO_CS, rotuloDoPapel, type PapelDaPlataforma } from '@/lib/plataforma'
 import { PapelDaPlataformaContext } from '@/components/admin/PapelDaPlataforma'
 
@@ -17,6 +17,8 @@ const todosOsItens = [
   { href: '/admin/support', label: 'Suporte', icon: MessageSquare },
   { href: '/admin/cofre', label: 'Cofre', icon: KeyRound },
   { href: '/admin/equipe', label: 'Equipe', icon: Users },
+  { href: '/admin/saude-da-volta', label: 'Saúde da volta', icon: HeartPulse },
+  { href: '/admin/demo', label: 'Demonstração', icon: FlaskConical },
   { href: '/admin/minha-conta', label: 'Minha conta', icon: UserCog },
 ]
 
